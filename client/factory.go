@@ -86,7 +86,7 @@ func (f *Factory) GetDeploymentsClient(credentialNamespace, credentialName strin
 	return toDeploymentsClient(client), nil
 }
 
-// GetDisksClient returns DisksClient that is used for management of virtual disks.
+// GetDisksClient returns DisksClient that is used for management of virutal disks.
 // The client (for specified cluster) is cached after creation, so the same client
 // is returned every time.
 func (f *Factory) GetDisksClient(credentialNamespace, credentialName string) (*compute.DisksClient, error) {

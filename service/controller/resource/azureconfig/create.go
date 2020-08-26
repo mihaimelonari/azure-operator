@@ -382,7 +382,8 @@ func (r *Resource) newCluster(cluster capiv1alpha3.Cluster, azureCluster capzv1a
 	}
 
 	{
-		commonCluster.Masters = newSpecClusterMasterNodes()
+		// TODO switch back to 1.
+		commonCluster.Masters = newSpecClusterMasterNodes(3)
 		commonCluster.Workers = newSpecClusterWorkerNodes(len(workers))
 	}
 
@@ -395,11 +396,11 @@ func (r *Resource) newCluster(cluster capiv1alpha3.Cluster, azureCluster capzv1a
 
 }
 
-func newSpecClusterMasterNodes() []providerv1alpha1.ClusterNode {
-	// Return one master node with empty ID. I don't expect it to be used
-	// anywhere.
-	masterNodes := make([]providerv1alpha1.ClusterNode, 1)
-	masterNodes[0].ID = "master-0"
+func newSpecClusterMasterNodes(numMasters int) []providerv1alpha1.ClusterNode {
+	masterNodes := make([]providerv1alpha1.ClusterNode, numMasters)
+	for i, _ := range masterNodes {
+		masterNodes[i].ID = fmt.Sprintf("master-%d", i)
+	}
 	return masterNodes
 }
 

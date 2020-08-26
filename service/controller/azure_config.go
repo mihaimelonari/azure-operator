@@ -40,6 +40,7 @@ import (
 	"github.com/giantswarm/azure-operator/v4/service/controller/resource/dnsrecord"
 	"github.com/giantswarm/azure-operator/v4/service/controller/resource/encryptionkey"
 	"github.com/giantswarm/azure-operator/v4/service/controller/resource/endpoints"
+	"github.com/giantswarm/azure-operator/v4/service/controller/resource/etcddisks"
 	"github.com/giantswarm/azure-operator/v4/service/controller/resource/instance"
 	"github.com/giantswarm/azure-operator/v4/service/controller/resource/ipam"
 	"github.com/giantswarm/azure-operator/v4/service/controller/resource/masters"
@@ -439,6 +440,22 @@ func newAzureConfigResources(config AzureConfigConfig, certsSearcher certs.Inter
 		}
 	}
 
+	var etcdDisksResource resource.Interface
+	{
+		c := etcddisks.Config{
+			K8sClient: config.K8sClient,
+			Logger:    config.Logger,
+
+			Azure:         config.Azure,
+			ClientFactory: clientFactory,
+		}
+
+		etcdDisksResource, err = etcddisks.New(c)
+		if err != nil {
+			return nil, microerror.Mask(err)
+		}
+	}
+
 	var iwd vmsscheck.InstanceWatchdog
 	{
 		c := vmsscheck.Config{
@@ -637,6 +654,7 @@ func newAzureConfigResources(config AzureConfigConfig, certsSearcher certs.Inter
 		containerURLResource,
 		blobObjectResource,
 		dnsrecordResource,
+		etcdDisksResource,
 		mastersResource,
 		instanceResource,
 		endpointsResource,

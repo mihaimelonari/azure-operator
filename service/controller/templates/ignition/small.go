@@ -48,17 +48,7 @@ const Small = `{
           "label": "kubelet",
           "format": "xfs"
         }
-      }{{ if eq .InstanceRole "master" -}},
-      {
-        "name": "etcd",
-        "mount": {
-          "device": "/dev/disk/azure/scsi1/lun0",
-          "wipeFilesystem": false,
-          "label": "etcd",
-          "format": "ext4"
-        }
       }
-	   {{- end }}
     ]
   }
 }

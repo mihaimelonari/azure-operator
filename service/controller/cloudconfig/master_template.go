@@ -62,7 +62,13 @@ func (c CloudConfig) NewMasterTemplate(ctx context.Context, data IgnitionTemplat
 		params.Cluster = data.CustomObject.Spec.Cluster
 		params.CalicoPolicyOnly = true
 		params.DisableIngressControllerService = true
-		params.Etcd.ClientPort = defaultEtcdPort
+		params.Etcd = k8scloudconfig.Etcd{
+			ClientPort:       defaultEtcdPort,
+			HighAvailability: true,
+			//InitialCluster:      "etcd=",
+			InitialClusterState: "new",
+			NodeName:            "etcd1",
+		}
 		params.Kubernetes = k8scloudconfig.Kubernetes{
 			Apiserver: k8scloudconfig.KubernetesPodOptions{
 				HostExtraMounts: []k8scloudconfig.KubernetesPodOptionsHostMount{
@@ -159,6 +165,19 @@ func (me *masterExtension) Files() ([]k8scloudconfig.FileAsset, error) {
 			},
 			Permissions: FilePermission,
 		},
+		{
+			AssetContent: ignition.EtcdUnitOverride,
+			Path:         "/etc/systemd/system/etcd3.service.d/10-wait-mount.conf",
+			Owner: k8scloudconfig.Owner{
+				Group: k8scloudconfig.Group{
+					Name: FileOwnerGroupName,
+				},
+				User: k8scloudconfig.User{
+					Name: FileOwnerUserName,
+				},
+			},
+			Permissions: FilePermission,
+		},
 	}
 
 	data := me.templateData(me.certFiles)
@@ -233,8 +252,8 @@ func (me *masterExtension) Units() ([]k8scloudconfig.UnitAsset, error) {
 			Enabled:      true,
 		},
 		{
-			AssetContent: ignition.EtcdMountUnit,
-			Name:         "var-lib-etcd.mount",
+			AssetContent: ignition.EtcdFormatUnit,
+			Name:         "etcd-disk-format.service",
 			Enabled:      true,
 		},
 		{
