@@ -181,7 +181,7 @@ func newDisksClient(authorizer autorest.Authorizer, subscriptionID, partnerID st
 	return &client, nil
 }
 
-func newDNSRecordSetsClient(authorizer autorest.Authorizer, subscriptionID, partnerID string) (*dns.RecordSetsClient, error) {
+func newDNSRecordSetsClient(authorizer autorest.Authorizer, subscriptionID, partnerID string) (interface{}, error) {
 	client := dns.NewRecordSetsClient(subscriptionID)
 	prepareClient(&client.Client, authorizer, partnerID)
 
