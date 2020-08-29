@@ -23,7 +23,8 @@ func (r *Resource) ensureDisks(ctx context.Context, cr v1alpha1.AzureConfig) err
 		return microerror.Mask(err)
 	}
 
-	for i := 0; i < count; i += 1 {
+	// TODO create disks asynchronously.
+	for i := 1; i <= count; i += 1 {
 		name := fmt.Sprintf("etcd%d", i)
 		_, err := disksClient.Get(ctx, key.ResourceGroupName(cr), name)
 		if IsNotFound(err) {

@@ -28,58 +28,73 @@ func (r *Resource) attachDisks(ctx context.Context, cr v1alpha1.AzureConfig) err
 		return microerror.Mask(err)
 	}
 
+	var members []string
+
 	for iterator.NotDone() {
 		instance := iterator.Value()
 
-		diskName := ""
-		// Check if VM has an ETCD disk attached.
-		for _, dataDisk := range *instance.StorageProfile.DataDisks {
-			// We assume etcd disk is the only one attached to lun 0.
-			if *dataDisk.Lun == 0 {
-				r.logger.LogCtx(ctx, "level", "info", "message", fmt.Sprintf("Found that instance %s has a disk on lun 0", *instance.InstanceID))
-				diskName = *dataDisk.Name
-				break
+		// Check if instance is running before going on with ETCD initialization.
+		if *instance.ProvisioningState != "Succeeded" {
+			r.logger.LogCtx(ctx, "level", "debug", "message", fmt.Sprintf("Instance %s has provisioning state %s: skipping", *instance.InstanceID, *instance.ProvisioningState))
+		} else {
+			diskName := ""
+			// Check if VM has an ETCD disk attached.
+			for _, dataDisk := range *instance.StorageProfile.DataDisks {
+				// We assume etcd disk is the only one attached to lun 0.
+				if *dataDisk.Lun == 0 {
+					r.logger.LogCtx(ctx, "level", "info", "message", fmt.Sprintf("Found that instance %s has a disk on lun 0", *instance.InstanceID))
+					diskName = *dataDisk.Name
+					break
+				}
 			}
-		}
 
-		if diskName == "" {
-			// This instance has no disk attached for etcd, search for an available one.
-			diskName, err = r.findAvailableDisk(ctx, cr)
-			if err != nil {
-				return microerror.Mask(err)
-			}
 			if diskName == "" {
-				// No disks available.
-				return noDisksAvailableError
-			}
-			diskID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s", vmssVMsClient.SubscriptionID, key.ResourceGroupName(cr), diskName)
-			r.logger.LogCtx(ctx, "level", "info", "message", fmt.Sprintf("Attaching disk %s to instance %s", diskName, *instance.InstanceID))
-			*instance.StorageProfile.DataDisks = append(*instance.StorageProfile.DataDisks, compute.DataDisk{
-				Lun:          to.Int32Ptr(0),
-				Name:         to.StringPtr(diskName),
-				CreateOption: compute.DiskCreateOptionTypesAttach,
-				ManagedDisk: &compute.ManagedDiskParameters{
-					ID: to.StringPtr(diskID),
-				},
-			})
+				// This instance has no disk attached for etcd, search for an available one.
+				diskName, err = r.findAvailableDisk(ctx, cr)
+				if err != nil {
+					return microerror.Mask(err)
+				}
+				if diskName == "" {
+					// No disks available.
+					return noDisksAvailableError
+				}
+				diskID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s", vmssVMsClient.SubscriptionID, key.ResourceGroupName(cr), diskName)
+				r.logger.LogCtx(ctx, "level", "info", "message", fmt.Sprintf("Attaching disk %s to instance %s", diskName, *instance.InstanceID))
+				*instance.StorageProfile.DataDisks = append(*instance.StorageProfile.DataDisks, compute.DataDisk{
+					Lun:          to.Int32Ptr(0),
+					Name:         to.StringPtr(diskName),
+					CreateOption: compute.DiskCreateOptionTypesAttach,
+					ManagedDisk: &compute.ManagedDiskParameters{
+						ID: to.StringPtr(diskID),
+					},
+				})
 
-			_, err = vmssVMsClient.Update(ctx, key.ResourceGroupName(cr), key.MasterVMSSName(cr), *instance.InstanceID, instance)
+				_, err = vmssVMsClient.Update(ctx, key.ResourceGroupName(cr), key.MasterVMSSName(cr), *instance.InstanceID, instance)
+				if err != nil {
+					return microerror.Mask(err)
+				}
+
+				r.logger.LogCtx(ctx, "level", "info", "message", fmt.Sprintf("Attached disk %s to instance %s", diskName, *instance.InstanceID))
+			}
+
+			// The instance now has a disk attached. I need to update the DNS record.
+			ipAddr, err := r.getVMSSInstanceIPAddress(ctx, cr, *instance.InstanceID)
 			if err != nil {
 				return microerror.Mask(err)
 			}
 
-			r.logger.LogCtx(ctx, "level", "info", "message", fmt.Sprintf("Attached disk %s to instance %s", diskName, *instance.InstanceID))
-		}
+			err = r.updateDNSRecord(ctx, cr, diskName, ipAddr)
+			if err != nil {
+				return microerror.Mask(err)
+			}
 
-		// The instance now has a disk attached. I need to update the DNS record.
-		ipAddr, err := r.getVMSSInstanceIPAddress(ctx, cr, *instance.InstanceID)
-		if err != nil {
-			return microerror.Mask(err)
-		}
+			memberUrl := fmt.Sprintf("http://%s.%s:%d", diskName, key.ClusterDNSDomain(cr), 2380)
+			members = append(members, fmt.Sprintf("%s=%s", diskName, memberUrl))
 
-		err = r.updateDNSRecord(ctx, cr, diskName, ipAddr)
-		if err != nil {
-			return microerror.Mask(err)
+			err = r.writeEnvFile(ctx, cr, diskName, memberUrl, members, *instance.InstanceID)
+			if err != nil {
+				return microerror.Mask(err)
+			}
 		}
 
 		err = iterator.NextWithContext(ctx)
@@ -106,7 +121,6 @@ func (r *Resource) findAvailableDisk(ctx context.Context, cr v1alpha1.AzureConfi
 		candidate := iterator.Value()
 
 		if strings.HasPrefix(*candidate.Name, "etcd") {
-			r.logger.LogCtx(ctx, "level", "info", fmt.Sprintf("Provisioning state for %s is: %s", *candidate.Name, *candidate.ProvisioningState))
 			// TODO check availabilty zone.
 			// TODO This does not take into account disks being attached.
 			if candidate.ManagedBy == nil {
@@ -178,6 +192,46 @@ func (r *Resource) updateDNSRecord(ctx context.Context, cr v1alpha1.AzureConfig,
 	}
 
 	r.logger.LogCtx(ctx, "level", "info", "message", fmt.Sprintf("Ensured A record %s => %s", nodeName, ipAddr))
+
+	return nil
+}
+
+func (r *Resource) writeEnvFile(ctx context.Context, cr v1alpha1.AzureConfig, memberName string, memberUrl string, members []string, instanceID string) error {
+	vmssVMsClient, err := r.clientFactory.GetVirtualMachineScaleSetVMsClient(cr.Spec.Azure.CredentialSecret.Namespace, cr.Spec.Azure.CredentialSecret.Name)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	initialCluster := strings.Join(members, ",")
+	initialClusterState := "existing"
+	if len(members) == 1 {
+		initialClusterState = "new"
+	}
+	commandId := "RunShellScript"
+	script := []string{
+		fmt.Sprintf(
+			"echo -e 'ETCD_NAME=%s\nETCD_PEER_URL=%s\nETCD_INITIAL_CLUSTER=%s\nETCD_INITIAL_CLUSTER_STATE=%s\n' | sudo tee /etc/etcd-bootstrap-env",
+			memberName,
+			memberUrl,
+			initialCluster,
+			initialClusterState,
+		),
+	}
+	r.logger.LogCtx(ctx, "level", "debug", "message", fmt.Sprintf("Writing ETCD env file to instance %s", instanceID))
+
+	runCommandInput := compute.RunCommandInput{
+		CommandID: &commandId,
+		Script:    &script,
+	}
+
+	runCommandFuture, err := vmssVMsClient.RunCommand(ctx, key.ResourceGroupName(cr), key.MasterVMSSName(cr), instanceID, runCommandInput)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+	_, err = vmssVMsClient.RunCommandResponder(runCommandFuture.Response())
+	if err != nil {
+		return microerror.Mask(err)
+	}
 
 	return nil
 }

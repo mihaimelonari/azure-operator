@@ -28,6 +28,11 @@ func (e *baseExtension) templateData(certFiles []certs.File) templateData {
 		certsPaths = append(certsPaths, file.AbsolutePath)
 	}
 
+	// Ensure ETCD port is set.
+	if e.customObject.Spec.Cluster.Etcd.Port == 0 {
+		e.customObject.Spec.Cluster.Etcd.Port = defaultEtcdPort
+	}
+
 	return templateData{
 		azureCNIFileParams{
 			VnetCIDR: e.vnetCIDR,

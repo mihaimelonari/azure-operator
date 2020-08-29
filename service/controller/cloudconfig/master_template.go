@@ -65,9 +65,11 @@ func (c CloudConfig) NewMasterTemplate(ctx context.Context, data IgnitionTemplat
 		params.Etcd = k8scloudconfig.Etcd{
 			ClientPort:       defaultEtcdPort,
 			HighAvailability: true,
-			//InitialCluster:      "etcd=",
-			InitialClusterState: "new",
-			NodeName:            "etcd1",
+			// These parameters are wrong on purpose.
+			// They are overridden by using an EnvironmentFile.
+			InitialCluster:      "wrong=http://127.0.0.1:1234",
+			InitialClusterState: "existing",
+			NodeName:            "wrong",
 		}
 		params.Kubernetes = k8scloudconfig.Kubernetes{
 			Apiserver: k8scloudconfig.KubernetesPodOptions{
@@ -166,8 +168,8 @@ func (me *masterExtension) Files() ([]k8scloudconfig.FileAsset, error) {
 			Permissions: FilePermission,
 		},
 		{
-			AssetContent: ignition.EtcdUnitOverride,
-			Path:         "/etc/systemd/system/etcd3.service.d/10-wait-mount.conf",
+			AssetContent: ignition.EtcdClusterBootstrapScript,
+			Path:         "/opt/etcd-cluster-bootstrap",
 			Owner: k8scloudconfig.Owner{
 				Group: k8scloudconfig.Group{
 					Name: FileOwnerGroupName,
@@ -247,13 +249,8 @@ func (me *masterExtension) Units() ([]k8scloudconfig.UnitAsset, error) {
 			Enabled:      true,
 		},
 		{
-			AssetContent: ignition.EtcdLBHostsEntry,
-			Name:         "etcd-lb-hosts-entry.service",
-			Enabled:      true,
-		},
-		{
-			AssetContent: ignition.EtcdFormatUnit,
-			Name:         "etcd-disk-format.service",
+			AssetContent: ignition.EtcdNodeBootstrapUnit,
+			Name:         "etcd-node-bootstrap.service",
 			Enabled:      true,
 		},
 		{
