@@ -32,7 +32,3 @@ func IsNotFound(err error) bool {
 
 	return false
 }
-
-var noDisksAvailableError = &microerror.Error{
-	Kind: "noDisksAvailableError",
-}

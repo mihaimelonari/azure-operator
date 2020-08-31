@@ -50,13 +50,18 @@ func (r *Resource) attachDisks(ctx context.Context, cr v1alpha1.AzureConfig) err
 
 			if diskName == "" {
 				// This instance has no disk attached for etcd, search for an available one.
-				diskName, err = r.findAvailableDisk(ctx, cr)
+				zone := ""
+				if len(*instance.Zones) > 0 {
+					zone = (*instance.Zones)[0]
+				}
+				diskName, err = r.findAvailableDisk(ctx, cr, zone)
 				if err != nil {
 					return microerror.Mask(err)
 				}
 				if diskName == "" {
-					// No disks available.
-					return noDisksAvailableError
+					// No disks available for this instance.
+					// There might be different reasons why this happens but it's not to be considered an error.
+					continue
 				}
 				diskID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s", vmssVMsClient.SubscriptionID, key.ResourceGroupName(cr), diskName)
 				r.logger.LogCtx(ctx, "level", "info", "message", fmt.Sprintf("Attaching disk %s to instance %s", diskName, *instance.InstanceID))
@@ -83,11 +88,13 @@ func (r *Resource) attachDisks(ctx context.Context, cr v1alpha1.AzureConfig) err
 				return microerror.Mask(err)
 			}
 
+			// Create/Update DNS record for this ETCD member.
 			err = r.updateDNSRecord(ctx, cr, diskName, ipAddr)
 			if err != nil {
 				return microerror.Mask(err)
 			}
 
+			// Write the ETCD bootstrap env file.
 			memberUrl := fmt.Sprintf("http://%s.%s:%d", diskName, key.ClusterDNSDomain(cr), 2380)
 			members = append(members, fmt.Sprintf("%s=%s", diskName, memberUrl))
 
@@ -106,7 +113,7 @@ func (r *Resource) attachDisks(ctx context.Context, cr v1alpha1.AzureConfig) err
 	return nil
 }
 
-func (r *Resource) findAvailableDisk(ctx context.Context, cr v1alpha1.AzureConfig) (string, error) {
+func (r *Resource) findAvailableDisk(ctx context.Context, cr v1alpha1.AzureConfig, az string) (string, error) {
 	disksClient, err := r.clientFactory.GetDisksClient(cr.Spec.Azure.CredentialSecret.Namespace, cr.Spec.Azure.CredentialSecret.Name)
 	if err != nil {
 		return "", microerror.Mask(err)
@@ -120,11 +127,19 @@ func (r *Resource) findAvailableDisk(ctx context.Context, cr v1alpha1.AzureConfi
 	for iterator.NotDone() {
 		candidate := iterator.Value()
 
-		if strings.HasPrefix(*candidate.Name, "etcd") {
-			// TODO check availabilty zone.
+		fmt.Printf("Disk %s has provisioning state %s\n", *candidate.Name, *candidate.ProvisioningState)
+
+		if val, ok := candidate.Tags[DiskLabelName]; ok && *val == DiskLabelValue {
 			// TODO This does not take into account disks being attached.
 			if candidate.ManagedBy == nil {
 				// Disk is unattached.
+
+				// Check availabilty zone.
+				if az != "" && (*candidate.Zones)[0] != az {
+					r.logger.LogCtx(ctx, "level", "info", fmt.Sprintf("Disk %s can't be used because availability zone does not match.", *candidate.Name))
+					continue
+				}
+
 				r.logger.LogCtx(ctx, "level", "info", fmt.Sprintf("Found available disk: %s", *candidate.Name))
 
 				return *candidate.Name, nil

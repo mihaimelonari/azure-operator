@@ -10,7 +10,9 @@ import (
 )
 
 const (
-	Name = "ETCDDisks"
+	Name           = "ETCDDisks"
+	DiskLabelName  = "gs-role"
+	DiskLabelValue = "etcd"
 )
 
 type Config struct {

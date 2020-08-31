@@ -15,6 +15,10 @@ import (
 
 func (r *Resource) ensureDisks(ctx context.Context, cr v1alpha1.AzureConfig) error {
 	count := len(cr.Spec.Azure.Masters)
+	if count%2 == 0 {
+		// There is an even number of Master nodes. We want only odd number of ETCD members.
+		count = count - 1
+	}
 
 	r.logger.LogCtx(ctx, "level", "debug", "message", fmt.Sprintf("Expected number of disks: %d", count))
 
@@ -23,12 +27,19 @@ func (r *Resource) ensureDisks(ctx context.Context, cr v1alpha1.AzureConfig) err
 		return microerror.Mask(err)
 	}
 
+	desiredAZs := key.AvailabilityZones(cr, r.azure.Location)
+
 	// TODO create disks asynchronously.
 	for i := 1; i <= count; i += 1 {
 		name := fmt.Sprintf("etcd%d", i)
 		_, err := disksClient.Get(ctx, key.ResourceGroupName(cr), name)
 		if IsNotFound(err) {
 			r.logger.LogCtx(ctx, "level", "debug", "message", fmt.Sprintf("Creating disk %s", name))
+
+			// Gets an Availability Zone from the list of the ones used by the cluster.
+			// If there are enough instances in the cluster, there should be at least one Disk per AZ.
+			zone := strconv.Itoa(desiredAZs[(i-1)%len(desiredAZs)])
+
 			// Disk not found, have to create it.
 			future, err := disksClient.CreateOrUpdate(ctx, key.ResourceGroupName(cr), name, compute.Disk{
 				DiskProperties: &compute.DiskProperties{
@@ -38,7 +49,10 @@ func (r *Resource) ensureDisks(ctx context.Context, cr v1alpha1.AzureConfig) err
 					DiskSizeGB: to.Int32Ptr(100),
 				},
 				Location: to.StringPtr(r.azure.Location),
-				Zones:    to.StringSlicePtr(mapIntToString(key.AvailabilityZones(cr, r.azure.Location))),
+				Tags: map[string]*string{
+					DiskLabelName: to.StringPtr(DiskLabelValue),
+				},
+				Zones: to.StringSlicePtr([]string{zone}),
 			})
 			if err != nil {
 				return microerror.Mask(err)
@@ -60,13 +74,4 @@ func (r *Resource) ensureDisks(ctx context.Context, cr v1alpha1.AzureConfig) err
 	r.logger.LogCtx(ctx, "level", "debug", "message", "All disks created")
 
 	return nil
-}
-
-func mapIntToString(input []int) []string {
-	var ret []string
-	for _, digit := range input {
-		ret = append(ret, strconv.Itoa(digit))
-	}
-
-	return ret
 }
