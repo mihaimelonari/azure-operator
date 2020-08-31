@@ -12,6 +12,13 @@ ExecStart=/opt/etcd-cluster-bootstrap
 WantedBy=multi-user.target
 `
 
+const EtcdUnitOverride = `[Service]
+ExecStartPre=/bin/bash -c "while [ ! -f /var/lib/etcd/ssl/peer-ca.pem ]; do echo 'Waiting for /var/lib/etcd/ssl/peer-ca.pem to be written' && sleep 1; done"
+ExecStartPre=/bin/bash -c "while [ ! -f /var/lib/etcd/ssl/peer-crt.pem ]; do echo 'Waiting for /var/lib/etcd/ssl/peer-crt.pem to be written' && sleep 1; done"
+ExecStartPre=/bin/bash -c "while [ ! -f /var/lib/etcd/ssl/peer-key.pem ]; do echo 'Waiting for /var/lib/etcd/ssl/peer-key.pem to be written' && sleep 1; done"
+EnvironmentFile=-/var/lib/etcd/cluster-environment
+`
+
 const EtcdClusterBootstrapScript = `#!/bin/bash
 
 # This function cleans up any etcd env file leftover.

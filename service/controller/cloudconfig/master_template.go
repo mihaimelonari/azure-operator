@@ -180,6 +180,19 @@ func (me *masterExtension) Files() ([]k8scloudconfig.FileAsset, error) {
 			},
 			Permissions: FilePermission,
 		},
+		{
+			AssetContent: ignition.EtcdUnitOverride,
+			Path:         "/etc/systemd/system/etcd3.service.d/10-override-env.conf",
+			Owner: k8scloudconfig.Owner{
+				Group: k8scloudconfig.Group{
+					Name: FileOwnerGroupName,
+				},
+				User: k8scloudconfig.User{
+					Name: FileOwnerUserName,
+				},
+			},
+			Permissions: FilePermission,
+		},
 	}
 
 	data := me.templateData(me.certFiles)
