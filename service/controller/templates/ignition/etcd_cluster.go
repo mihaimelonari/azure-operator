@@ -79,9 +79,9 @@ prepare-disk(){
 # This step waits for an ETCD cluster environment file to exist than it copies it into the etcd disk.
 prepare-env(){
     # Wait for the bootstrap file to exist.
-    while [ ! -f /var/lib/etcd/cluster-environment ] && [ ! -f /etc/etcd-bootstrap-env ]
+    while [ ! -f /etc/etcd-bootstrap-env ]
     do
-        echo 'Waiting for /var/lib/etcd/cluster-environment or /etc/etcd-bootstrap-env to exist'
+        echo 'Waiting for /etc/etcd-bootstrap-env to exist'
         sleep 10
     done
     
@@ -141,7 +141,7 @@ join-cluster(){
     echo "Node ${ETCD_NAME} joined the ETCD cluster"
     echo "Updating ENV file in /var/lib/etcd/cluster-environment"
     
-    echo -e \"ETCD_NAME=${ETCD_NAME}\nETCD_INITIAL_CLUSTER=\nETCD_INITIAL_CLUSTER_STATE=existing\n\" | tee /var/lib/etcd/cluster-environment
+    echo -e "ETCD_NAME=${ETCD_NAME}\nETCD_INITIAL_CLUSTER=\nETCD_INITIAL_CLUSTER_STATE=existing\n\" | tee /var/lib/etcd/cluster-environment
     
     echo 'ENV file updated'
 }
