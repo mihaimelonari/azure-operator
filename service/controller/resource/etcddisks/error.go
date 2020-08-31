@@ -5,6 +5,10 @@ import (
 	"github.com/giantswarm/microerror"
 )
 
+var certUnavailableError = &microerror.Error{
+	Kind: "certUnavailableError",
+}
+
 var ipAddressUnavailableError = &microerror.Error{
 	Kind: "ipAddressUnavailableError",
 }

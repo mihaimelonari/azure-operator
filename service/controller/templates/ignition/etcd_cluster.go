@@ -14,6 +14,13 @@ WantedBy=multi-user.target
 
 const EtcdClusterBootstrapScript = `#!/bin/bash
 
+# This function cleans up any etcd env file leftover.
+# The file will be created again by the azure operator when and if the current node has 
+# to become a node in the ETCD cluster.
+cleanup-old-env(){
+    rm -f /etc/etcd-bootstrap-env
+}
+
 # This step waits for a virtual disk to be attached at lun0, then it ensures it is formatted and mounted in /var/lib/etcd.
 prepare-disk(){
     # Wait for the disk to be attached.
@@ -78,6 +85,13 @@ prepare-env(){
         sleep 5
     done
     
+    # Extract the peer certificates from the environment file.
+    mkdir -p /var/lib/etcd/ssl
+    . /etc/etcd-bootstrap-env
+    echo "${ETCD_PEER_CA}" |base64 -d >/var/lib/etcd/ssl/peer-ca.pem
+    echo "${ETCD_PEER_CRT}" |base64 -d >/var/lib/etcd/ssl/peer-crt.pem
+    echo "${ETCD_PEER_KEY}" |base64 -d >/var/lib/etcd/ssl/peer-key.pem
+
     # Ensure not to override any existing file.
     if [ ! -f /var/lib/etcd/cluster-environment ]
     then
@@ -125,6 +139,7 @@ join-cluster(){
     echo 'ENV file updated'
 }
 
+cleanup-old-env
 prepare-disk
 prepare-env
 join-cluster

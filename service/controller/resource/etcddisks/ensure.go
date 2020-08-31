@@ -20,6 +20,12 @@ func (r *Resource) ensureDisks(ctx context.Context, cr v1alpha1.AzureConfig) err
 		count = count - 1
 	}
 
+	// Cluster operator currently generates no more than 3 certificate for ETCD nodes.
+	// This constitutes an upper bound on the number of ETCD members in a cluster.
+	if count > 3 {
+		count = 3
+	}
+
 	r.logger.LogCtx(ctx, "level", "debug", "message", fmt.Sprintf("Expected number of disks: %d", count))
 
 	disksClient, err := r.clientFactory.GetDisksClient(cr.Spec.Azure.CredentialSecret.Namespace, cr.Spec.Azure.CredentialSecret.Name)

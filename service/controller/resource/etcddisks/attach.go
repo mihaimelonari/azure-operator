@@ -2,6 +2,7 @@ package etcddisks
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"strings"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/dns/mgmt/2018-05-01/dns"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/giantswarm/apiextensions/pkg/apis/provider/v1alpha1"
+	"github.com/giantswarm/certs/v2/pkg/certs"
 	"github.com/giantswarm/microerror"
 
 	"github.com/giantswarm/azure-operator/v4/service/controller/key"
@@ -94,11 +96,17 @@ func (r *Resource) attachDisks(ctx context.Context, cr v1alpha1.AzureConfig) err
 				return microerror.Mask(err)
 			}
 
+			// Get the TLS certificate for this member.
+			tls, err := r.getTLSPeerCert(ctx, cr, diskName)
+			if err != nil {
+				return microerror.Mask(err)
+			}
+
 			// Write the ETCD bootstrap env file.
-			memberUrl := fmt.Sprintf("http://%s.%s:%d", diskName, key.ClusterDNSDomain(cr), 2380)
+			memberUrl := fmt.Sprintf("https://%s.%s:%d", diskName, key.ClusterDNSDomain(cr), 2380)
 			members = append(members, fmt.Sprintf("%s=%s", diskName, memberUrl))
 
-			err = r.writeEnvFile(ctx, cr, diskName, memberUrl, members, *instance.InstanceID)
+			err = r.writeEnvFile(ctx, cr, diskName, memberUrl, members, tls, *instance.InstanceID)
 			if err != nil {
 				return microerror.Mask(err)
 			}
@@ -153,6 +161,27 @@ func (r *Resource) findAvailableDisk(ctx context.Context, cr v1alpha1.AzureConfi
 	}
 
 	return "", nil
+}
+
+func (r *Resource) getTLSPeerCert(ctx context.Context, cr v1alpha1.AzureConfig, memberName string) (*certs.TLS, error) {
+	var certName certs.Cert
+	switch memberName {
+	case "etcd1":
+		certName = certs.Etcd1Cert
+	case "etcd2":
+		certName = certs.Etcd2Cert
+	case "etcd3":
+		certName = certs.Etcd3Cert
+	default:
+		return nil, certUnavailableError
+	}
+
+	tls, err := r.certsSearcher.SearchTLS(key.ClusterID(&cr), certName)
+	if err != nil {
+		return nil, microerror.Mask(err)
+	}
+
+	return &tls, nil
 }
 
 func (r *Resource) getVMSSInstanceIPAddress(ctx context.Context, cr v1alpha1.AzureConfig, instanceID string) (string, error) {
@@ -211,7 +240,7 @@ func (r *Resource) updateDNSRecord(ctx context.Context, cr v1alpha1.AzureConfig,
 	return nil
 }
 
-func (r *Resource) writeEnvFile(ctx context.Context, cr v1alpha1.AzureConfig, memberName string, memberUrl string, members []string, instanceID string) error {
+func (r *Resource) writeEnvFile(ctx context.Context, cr v1alpha1.AzureConfig, memberName string, memberUrl string, members []string, tls *certs.TLS, instanceID string) error {
 	vmssVMsClient, err := r.clientFactory.GetVirtualMachineScaleSetVMsClient(cr.Spec.Azure.CredentialSecret.Namespace, cr.Spec.Azure.CredentialSecret.Name)
 	if err != nil {
 		return microerror.Mask(err)
@@ -222,14 +251,23 @@ func (r *Resource) writeEnvFile(ctx context.Context, cr v1alpha1.AzureConfig, me
 	if len(members) == 1 {
 		initialClusterState = "new"
 	}
+	vars := []string{
+		fmt.Sprintf("ETCD_NAME=%s", memberName),
+		fmt.Sprintf("ETCD_PEER_URL=%s", memberUrl),
+		fmt.Sprintf("ETCD_INITIAL_CLUSTER=%s", initialCluster),
+		fmt.Sprintf("ETCD_INITIAL_CLUSTER_STATE=%s", initialClusterState),
+		fmt.Sprintf("ETCD_PEER_CA_PATH=%s", "/var/lib/etcd/ssl/peer-ca.pem"),
+		fmt.Sprintf("ETCD_PEER_CERT_PATH=%s", "/var/lib/etcd/ssl/peer-crt.pem"),
+		fmt.Sprintf("ETCD_PEER_KEY_PATH=%s", "/var/lib/etcd/ssl/peer-key.pem"),
+		fmt.Sprintf("ETCD_PEER_CA=%s", base64.StdEncoding.EncodeToString(tls.CA)),
+		fmt.Sprintf("ETCD_PEER_CRT=%s", base64.StdEncoding.EncodeToString(tls.Crt)),
+		fmt.Sprintf("ETCD_PEER_KEY=%s", base64.StdEncoding.EncodeToString(tls.Key)),
+	}
 	commandId := "RunShellScript"
 	script := []string{
 		fmt.Sprintf(
-			"echo -e 'ETCD_NAME=%s\nETCD_PEER_URL=%s\nETCD_INITIAL_CLUSTER=%s\nETCD_INITIAL_CLUSTER_STATE=%s\n' | sudo tee /etc/etcd-bootstrap-env",
-			memberName,
-			memberUrl,
-			initialCluster,
-			initialClusterState,
+			"echo -e '%s' | sudo tee /etc/etcd-bootstrap-env",
+			strings.Join(vars, "\\n"),
 		),
 	}
 	r.logger.LogCtx(ctx, "level", "debug", "message", fmt.Sprintf("Writing ETCD env file to instance %s", instanceID))

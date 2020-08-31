@@ -443,8 +443,9 @@ func newAzureConfigResources(config AzureConfigConfig, certsSearcher certs.Inter
 	var etcdDisksResource resource.Interface
 	{
 		c := etcddisks.Config{
-			K8sClient: config.K8sClient,
-			Logger:    config.Logger,
+			CertsSearcher: certsSearcher,
+			K8sClient:     config.K8sClient,
+			Logger:        config.Logger,
 
 			Azure:         config.Azure,
 			ClientFactory: clientFactory,
