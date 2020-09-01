@@ -295,20 +295,6 @@
                     }
                   },
                   {
-                    "name":"etcdLoadBalancerRuleMasters",
-                    "properties":{
-                      "description":"Allow master nodes the etcd loadbalancer via the public IP.",
-                      "protocol":"tcp",
-                      "sourcePortRange":"*",
-                      "destinationPortRange":"[variables('etcdPort')]",
-                      "sourceAddressPrefix":"[parameters('mastersNatGWPublicIP')]",
-                      "destinationAddressPrefix":"[parameters('masterSubnetCidr')]",
-                      "access":"Allow",
-                      "direction":"Inbound",
-                      "priority":"3899"
-                    }
-                  },
-                  {
                     "name":"allowWorkerSubnet",
                     "properties":{
                       "description":"Allow the worker machines to reach the master machines on any ports.",

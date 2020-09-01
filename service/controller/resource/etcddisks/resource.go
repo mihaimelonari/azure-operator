@@ -14,6 +14,8 @@ const (
 	Name           = "ETCDDisks"
 	DiskLabelName  = "gs-role"
 	DiskLabelValue = "etcd"
+
+	SnapshotDiskNameLabel = "gs-disk-name"
 )
 
 type Config struct {

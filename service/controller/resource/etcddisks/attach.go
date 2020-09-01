@@ -188,6 +188,53 @@ func (r *Resource) findAvailableDisk(ctx context.Context, cr v1alpha1.AzureConfi
 		{
 			r.logger.LogCtx(ctx, "level", "info", "message", fmt.Sprintf("Creating a snapshot from disk %s.", *availableInAnotherAZ.Name))
 
+			snapshotsClient, err := r.clientFactory.GetSnapshotsClient(cr.Spec.Azure.CredentialSecret.Namespace, cr.Spec.Azure.CredentialSecret.Name)
+			if err != nil {
+				return "", microerror.Mask(err)
+			}
+
+			snapshotName := fmt.Sprintf("%s-snapshot", *availableInAnotherAZ.Name)
+			future, err := snapshotsClient.CreateOrUpdate(ctx, key.ResourceGroupName(cr), snapshotName, compute.Snapshot{
+				SnapshotProperties: &compute.SnapshotProperties{
+					CreationData: &compute.CreationData{
+						CreateOption:     compute.Copy,
+						SourceResourceID: availableInAnotherAZ.ID,
+					},
+					Incremental: to.BoolPtr(false),
+				},
+				Location: availableInAnotherAZ.Location,
+				Tags: map[string]*string{
+					DiskLabelName:         to.StringPtr(DiskLabelValue),
+					SnapshotDiskNameLabel: availableInAnotherAZ.Name,
+				},
+			})
+			if err != nil {
+				return "", microerror.Mask(err)
+			}
+
+			err = future.WaitForCompletionRef(ctx, snapshotsClient.Client)
+			if err != nil {
+				return "", microerror.Mask(err)
+			}
+
+			r.logger.LogCtx(ctx, "level", "info", "message", fmt.Sprintf("Created snapshot %s from disk %s.", snapshotName, *availableInAnotherAZ.Name))
+		}
+
+		// Delete source disk.
+		{
+			r.logger.LogCtx(ctx, "level", "info", "message", fmt.Sprintf("Deleting disk %s.", *availableInAnotherAZ.Name))
+			future, err := disksClient.Delete(ctx, key.ResourceGroupName(cr), *availableInAnotherAZ.Name)
+			if err != nil {
+				return "", microerror.Mask(err)
+			}
+
+			// Wait for the disk to be deleted.
+			err = future.WaitForCompletionRef(ctx, disksClient.Client)
+			if err != nil {
+				return "", microerror.Mask(err)
+			}
+
+			r.logger.LogCtx(ctx, "level", "info", "message", fmt.Sprintf("Deleted disk %s.", *availableInAnotherAZ.Name))
 		}
 
 		// We triggered the AZ change but we still return no disk available.

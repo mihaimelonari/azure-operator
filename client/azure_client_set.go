@@ -227,8 +227,6 @@ func newSnapshotsClient(authorizer autorest.Authorizer, subscriptionID, partnerI
 	client := compute.NewSnapshotsClient(subscriptionID)
 	prepareClient(&client.Client, authorizer, partnerID)
 
-	client.C
-
 	return &client, nil
 }
 
@@ -321,6 +319,10 @@ func toVirtualMachineScaleSetVMsClient(client interface{}) *compute.VirtualMachi
 
 func toDNSRecordSetsClient(client interface{}) *dns.RecordSetsClient {
 	return client.(*dns.RecordSetsClient)
+}
+
+func toSnapshotsClient(client interface{}) *compute.SnapshotsClient {
+	return client.(*compute.SnapshotsClient)
 }
 
 func toStorageAccountsClient(client interface{}) *storage.AccountsClient {

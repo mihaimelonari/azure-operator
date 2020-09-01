@@ -33,6 +33,11 @@ func (r *Resource) ensureDisks(ctx context.Context, cr v1alpha1.AzureConfig) err
 		return microerror.Mask(err)
 	}
 
+	snapshotsClient, err := r.clientFactory.GetSnapshotsClient(cr.Spec.Azure.CredentialSecret.Namespace, cr.Spec.Azure.CredentialSecret.Name)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
 	desiredAZs := key.AvailabilityZones(cr, r.azure.Location)
 
 	// TODO create disks asynchronously.
@@ -40,19 +45,48 @@ func (r *Resource) ensureDisks(ctx context.Context, cr v1alpha1.AzureConfig) err
 		name := fmt.Sprintf("etcd%d", i)
 		_, err := disksClient.Get(ctx, key.ResourceGroupName(cr), name)
 		if IsNotFound(err) {
+			// Disk not found, have to create it.
 			r.logger.LogCtx(ctx, "level", "debug", "message", fmt.Sprintf("Creating disk %s", name))
+
+			// Look for a snapshot to create the disk from.
+			r.logger.LogCtx(ctx, "level", "debug", "message", fmt.Sprintf("Looking for a snapshot for disk %s", name))
+			iterator, err := snapshotsClient.ListByResourceGroupComplete(ctx, key.ResourceGroupName(cr))
+			if err != nil {
+				return microerror.Mask(err)
+			}
+
+			var snapshotName string
+			creationData := compute.CreationData{
+				CreateOption: compute.Empty,
+			}
+			for iterator.NotDone() {
+				snapshot := iterator.Value()
+
+				// Check if this snapshot comes from an ETCD backup by checking the tag.
+				if val, ok := snapshot.Tags[DiskLabelName]; ok && *val == DiskLabelValue {
+					if val, ok := snapshot.Tags[SnapshotDiskNameLabel]; ok && *val == name {
+						snapshotName := *snapshot.Name
+						r.logger.LogCtx(ctx, "level", "debug", "message", fmt.Sprintf("Using snapshot %s to create disk %s", snapshotName, name))
+						creationData.CreateOption = compute.Copy
+						creationData.SourceResourceID = snapshot.ID
+						break
+					}
+				}
+
+				err := iterator.NextWithContext(ctx)
+				if err != nil {
+					return microerror.Mask(err)
+				}
+			}
 
 			// Gets an Availability Zone from the list of the ones used by the cluster.
 			// If there are enough instances in the cluster, there should be at least one Disk per AZ.
 			zone := strconv.Itoa(desiredAZs[(i-1)%len(desiredAZs)])
 
-			// Disk not found, have to create it.
 			future, err := disksClient.CreateOrUpdate(ctx, key.ResourceGroupName(cr), name, compute.Disk{
 				DiskProperties: &compute.DiskProperties{
-					CreationData: &compute.CreationData{
-						CreateOption: compute.Empty,
-					},
-					DiskSizeGB: to.Int32Ptr(100),
+					CreationData: &creationData,
+					DiskSizeGB:   to.Int32Ptr(100),
 				},
 				Location: to.StringPtr(r.azure.Location),
 				Tags: map[string]*string{
@@ -67,6 +101,14 @@ func (r *Resource) ensureDisks(ctx context.Context, cr v1alpha1.AzureConfig) err
 			err = future.WaitForCompletionRef(ctx, disksClient.Client)
 			if err != nil {
 				return microerror.Mask(err)
+			}
+
+			if len(snapshotName) > 0 {
+				// Delete the snapshot to avoid it being reused.
+				_, err := snapshotsClient.Delete(ctx, key.ResourceGroupName(cr), snapshotName)
+				if err != nil {
+					return microerror.Mask(err)
+				}
 			}
 
 			r.logger.LogCtx(ctx, "level", "debug", "message", fmt.Sprintf("Disk %s created", name))

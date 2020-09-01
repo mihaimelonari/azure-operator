@@ -124,12 +124,15 @@ join-cluster(){
     # Only join additional nodes.
     if [ ${ETCD_INITIAL_CLUSTER_STATE} == 'existing' ]
     then
-        echo "Joining ${ETCD_NAME} to the cluster"
-		while ! etcdctl member add ${ETCD_NAME} --peer-urls=${ETCD_PEER_URL}
-        do
-            echo "Failed adding member, trying again"
-            sleep 5
-        done
+        if ! etcdctl member list -w json | jq -r '.members[].name' | grep "${ETCD_NAME}"
+        then
+            echo "Joining ${ETCD_NAME} to the cluster"
+		    while ! etcdctl member add ${ETCD_NAME} --peer-urls=${ETCD_PEER_URL}
+            do
+                echo "Failed adding member, trying again"
+                sleep 5
+            done
+        fi
     fi
     
     while ! etcdctl member list -w json | jq -r '.members[].name' | grep "${ETCD_NAME}"
