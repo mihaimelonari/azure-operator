@@ -223,6 +223,15 @@ func newSecurityRulesClient(authorizer autorest.Authorizer, subscriptionID, part
 	return &client, nil
 }
 
+func newSnapshotsClient(authorizer autorest.Authorizer, subscriptionID, partnerID string) (interface{}, error) {
+	client := compute.NewSnapshotsClient(subscriptionID)
+	prepareClient(&client.Client, authorizer, partnerID)
+
+	client.C
+
+	return &client, nil
+}
+
 func newStorageAccountsClient(authorizer autorest.Authorizer, subscriptionID, partnerID string) (interface{}, error) {
 	client := storage.NewAccountsClient(subscriptionID)
 	prepareClient(&client.Client, authorizer, partnerID)

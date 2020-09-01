@@ -141,7 +141,7 @@ join-cluster(){
     echo "Node ${ETCD_NAME} joined the ETCD cluster"
     echo "Updating ENV file in /var/lib/etcd/cluster-environment"
     
-    echo -e "ETCD_NAME=${ETCD_NAME}\nETCD_INITIAL_CLUSTER=\nETCD_INITIAL_CLUSTER_STATE=existing\n\" | tee /var/lib/etcd/cluster-environment
+    echo -e "ETCD_NAME=${ETCD_NAME}\nETCD_INITIAL_CLUSTER=\nETCD_INITIAL_CLUSTER_STATE=existing\n" | tee /var/lib/etcd/cluster-environment
     
     echo 'ENV file updated'
 }

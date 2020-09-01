@@ -52,6 +52,7 @@ func (r *Resource) attachDisks(ctx context.Context, cr v1alpha1.AzureConfig) err
 
 			if diskName == "" {
 				// This instance has no disk attached for etcd, search for an available one.
+				r.logger.LogCtx(ctx, "level", "info", "message", fmt.Sprintf("Looking for an available disk for instance %s", *instance.InstanceID))
 				zone := ""
 				if len(*instance.Zones) > 0 {
 					zone = (*instance.Zones)[0]
@@ -60,55 +61,54 @@ func (r *Resource) attachDisks(ctx context.Context, cr v1alpha1.AzureConfig) err
 				if err != nil {
 					return microerror.Mask(err)
 				}
-				if diskName == "" {
-					// No disks available for this instance.
-					// There might be different reasons why this happens but it's not to be considered an error.
-					continue
-				}
-				diskID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s", vmssVMsClient.SubscriptionID, key.ResourceGroupName(cr), diskName)
-				r.logger.LogCtx(ctx, "level", "info", "message", fmt.Sprintf("Attaching disk %s to instance %s", diskName, *instance.InstanceID))
-				*instance.StorageProfile.DataDisks = append(*instance.StorageProfile.DataDisks, compute.DataDisk{
-					Lun:          to.Int32Ptr(0),
-					Name:         to.StringPtr(diskName),
-					CreateOption: compute.DiskCreateOptionTypesAttach,
-					ManagedDisk: &compute.ManagedDiskParameters{
-						ID: to.StringPtr(diskID),
-					},
-				})
+				if diskName != "" {
+					diskID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/disks/%s", vmssVMsClient.SubscriptionID, key.ResourceGroupName(cr), diskName)
+					r.logger.LogCtx(ctx, "level", "info", "message", fmt.Sprintf("Attaching disk %s to instance %s", diskName, *instance.InstanceID))
+					*instance.StorageProfile.DataDisks = append(*instance.StorageProfile.DataDisks, compute.DataDisk{
+						Lun:          to.Int32Ptr(0),
+						Name:         to.StringPtr(diskName),
+						CreateOption: compute.DiskCreateOptionTypesAttach,
+						ManagedDisk: &compute.ManagedDiskParameters{
+							ID: to.StringPtr(diskID),
+						},
+					})
 
-				_, err = vmssVMsClient.Update(ctx, key.ResourceGroupName(cr), key.MasterVMSSName(cr), *instance.InstanceID, instance)
+					_, err = vmssVMsClient.Update(ctx, key.ResourceGroupName(cr), key.MasterVMSSName(cr), *instance.InstanceID, instance)
+					if err != nil {
+						return microerror.Mask(err)
+					}
+
+					r.logger.LogCtx(ctx, "level", "info", "message", fmt.Sprintf("Attached disk %s to instance %s", diskName, *instance.InstanceID))
+				}
+			}
+
+			if diskName != "" {
+				// The instance now has a disk attached. I need to update the DNS record.
+				ipAddr, err := r.getVMSSInstanceIPAddress(ctx, cr, *instance.InstanceID)
 				if err != nil {
 					return microerror.Mask(err)
 				}
 
-				r.logger.LogCtx(ctx, "level", "info", "message", fmt.Sprintf("Attached disk %s to instance %s", diskName, *instance.InstanceID))
-			}
+				// Create/Update DNS record for this ETCD member.
+				err = r.updateDNSRecord(ctx, cr, diskName, ipAddr)
+				if err != nil {
+					return microerror.Mask(err)
+				}
 
-			// The instance now has a disk attached. I need to update the DNS record.
-			ipAddr, err := r.getVMSSInstanceIPAddress(ctx, cr, *instance.InstanceID)
-			if err != nil {
-				return microerror.Mask(err)
-			}
+				// Get the TLS certificate for this member.
+				tls, err := r.getTLSPeerCert(ctx, cr, diskName)
+				if err != nil {
+					return microerror.Mask(err)
+				}
 
-			// Create/Update DNS record for this ETCD member.
-			err = r.updateDNSRecord(ctx, cr, diskName, ipAddr)
-			if err != nil {
-				return microerror.Mask(err)
-			}
+				// Write the ETCD bootstrap env file.
+				memberUrl := fmt.Sprintf("https://%s.%s:%d", diskName, key.ClusterDNSDomain(cr), 2380)
+				members = append(members, fmt.Sprintf("%s=%s", diskName, memberUrl))
 
-			// Get the TLS certificate for this member.
-			tls, err := r.getTLSPeerCert(ctx, cr, diskName)
-			if err != nil {
-				return microerror.Mask(err)
-			}
-
-			// Write the ETCD bootstrap env file.
-			memberUrl := fmt.Sprintf("https://%s.%s:%d", diskName, key.ClusterDNSDomain(cr), 2380)
-			members = append(members, fmt.Sprintf("%s=%s", diskName, memberUrl))
-
-			err = r.writeEnvFile(ctx, cr, diskName, memberUrl, members, tls, *instance.InstanceID)
-			if err != nil {
-				return microerror.Mask(err)
+				err = r.writeEnvFile(ctx, cr, diskName, memberUrl, members, tls, *instance.InstanceID)
+				if err != nil {
+					return microerror.Mask(err)
+				}
 			}
 		}
 
@@ -132,25 +132,23 @@ func (r *Resource) findAvailableDisk(ctx context.Context, cr v1alpha1.AzureConfi
 		return "", microerror.Mask(err)
 	}
 
+	var availableInAnotherAZ *compute.Disk
 	for iterator.NotDone() {
 		candidate := iterator.Value()
 
-		fmt.Printf("Disk %s has provisioning state %s\n", *candidate.Name, *candidate.ProvisioningState)
-
 		if val, ok := candidate.Tags[DiskLabelName]; ok && *val == DiskLabelValue {
 			// TODO This does not take into account disks being attached.
-			if candidate.ManagedBy == nil {
+			if *candidate.ProvisioningState == "Succeeded" && candidate.ManagedBy == nil {
 				// Disk is unattached.
 
 				// Check availabilty zone.
 				if az != "" && (*candidate.Zones)[0] != az {
-					r.logger.LogCtx(ctx, "level", "info", fmt.Sprintf("Disk %s can't be used because availability zone does not match.", *candidate.Name))
-					continue
+					r.logger.LogCtx(ctx, "level", "info", "message", fmt.Sprintf("Disk %s can't be used because availability zone does not match.", *candidate.Name))
+					availableInAnotherAZ = &candidate
+				} else {
+					r.logger.LogCtx(ctx, "level", "info", "message", fmt.Sprintf("Found available disk: %s", *candidate.Name))
+					return *candidate.Name, nil
 				}
-
-				r.logger.LogCtx(ctx, "level", "info", fmt.Sprintf("Found available disk: %s", *candidate.Name))
-
-				return *candidate.Name, nil
 			}
 		}
 
@@ -158,6 +156,42 @@ func (r *Resource) findAvailableDisk(ctx context.Context, cr v1alpha1.AzureConfi
 		if err != nil {
 			return "", microerror.Mask(err)
 		}
+	}
+
+	// We didn't find any disk ready to be attached.
+	if availableInAnotherAZ != nil {
+		r.logger.LogCtx(ctx, "level", "info", "message", fmt.Sprintf("Moving disk %s to zone %s.", *availableInAnotherAZ.Name, az))
+		// There an available disk in a different AZ.
+		// We migrate it to the desired AZ.
+		//availableInAnotherAZ.Zones = to.StringSlicePtr([]string{az})
+
+		// Clean up tags to make this disk not selectable any more.
+		{
+			r.logger.LogCtx(ctx, "level", "info", "message", fmt.Sprintf("Removing all tags from disk %s.", *availableInAnotherAZ.Name))
+			availableInAnotherAZ.Tags = map[string]*string{}
+
+			future, err := disksClient.CreateOrUpdate(ctx, key.ResourceGroupName(cr), *availableInAnotherAZ.Name, *availableInAnotherAZ)
+			if err != nil {
+				return "", microerror.Mask(err)
+			}
+
+			// Wait for the tag to be removed.
+			err = future.WaitForCompletionRef(ctx, disksClient.Client)
+			if err != nil {
+				return "", microerror.Mask(err)
+			}
+
+			r.logger.LogCtx(ctx, "level", "info", "message", fmt.Sprintf("Removed all tags from disk %s.", *availableInAnotherAZ.Name))
+		}
+
+		// Create a snapshot of the source disk.
+		{
+			r.logger.LogCtx(ctx, "level", "info", "message", fmt.Sprintf("Creating a snapshot from disk %s.", *availableInAnotherAZ.Name))
+
+		}
+
+		// We triggered the AZ change but we still return no disk available.
+		// Disk will be attached during next reconciliation loop.
 	}
 
 	return "", nil
