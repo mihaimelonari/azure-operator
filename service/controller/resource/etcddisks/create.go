@@ -14,17 +14,24 @@ func (r *Resource) EnsureCreated(ctx context.Context, obj interface{}) error {
 		return microerror.Mask(err)
 	}
 
-	r.logger.LogCtx(ctx, "level", "debug", "message", "Ensuring ETCD disks are created")
-
-	err = r.ensureDisks(ctx, cr)
+	// Check if all needed resources are ready for the ETCD cluster to be set up.
+	ready, err := r.verifyPrerequisites(ctx, cr)
 	if err != nil {
 		return microerror.Mask(err)
 	}
 
+	if !ready {
+		r.logger.LogCtx(ctx, "level", "debug", "message", "Prerequisites not fulfilled, waiting.")
+		return nil
+	}
+
+	// Setup the ETCD cluster.
 	err = r.attachDisks(ctx, cr)
 	if err != nil {
 		return microerror.Mask(err)
 	}
+
+	// TODO Cleanup any snapshot leftovers.
 
 	return nil
 }
