@@ -151,6 +151,10 @@ func (r *Resource) verifyPrerequisites(ctx context.Context, cr v1alpha1.AzureCon
 }
 
 // Function difference returns the elements in `a` that aren't in `b`.
+// Example:
+//   a = ["1", "1", "2"]
+//   b = ["1"]
+//   difference(a,b) = ["1", "2"]
 func difference(a, b []string) []string {
 	count := make(map[string]int)
 	for _, x := range b {
