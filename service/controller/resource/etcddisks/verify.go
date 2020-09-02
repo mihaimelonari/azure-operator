@@ -45,6 +45,7 @@ func (r *Resource) verifyPrerequisites(ctx context.Context, cr v1alpha1.AzureCon
 	var readyInstances int
 	var desiredAZs []string
 	{
+		// TODO consider an instance ready only if it is running the current version of the azure operator.
 		iterator, err := vmssVMsClient.ListComplete(ctx, key.ResourceGroupName(cr), key.MasterVMSSName(cr), "", "", "")
 		if IsNotFound(err) {
 			r.logger.LogCtx(ctx, "level", "info", "message", "VMSS not found, can't proceed with attachment of disks")
