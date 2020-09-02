@@ -5,7 +5,7 @@
     "masterLBBackendPoolID":{
       "type":"string",
       "metadata":{
-        "description":"Output value of the API load balancer backend pool ID as referenced from the API load balancer setup."
+        "description":"Output value of the Master nodes load balancer backend pool ID as referenced from the API load balancer setup."
       }
     },
     "azureOperatorVersion":{
