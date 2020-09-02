@@ -144,6 +144,7 @@ func (r *Resource) findAvailableDisk(ctx context.Context, cr v1alpha1.AzureConfi
 		}
 	}
 
+	// TODO check if this can be any more asynchronous.
 	// We didn't find any disk ready to be attached.
 	if availableInAnotherAZ != nil {
 		r.logger.LogCtx(ctx, "level", "info", "message", fmt.Sprintf("Moving disk %s to zone %s.", *availableInAnotherAZ.Name, az))

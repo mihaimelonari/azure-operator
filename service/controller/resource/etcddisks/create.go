@@ -31,7 +31,11 @@ func (r *Resource) EnsureCreated(ctx context.Context, obj interface{}) error {
 		return microerror.Mask(err)
 	}
 
-	// TODO Cleanup any snapshot leftovers.
+	// Cleanup any snapshot leftovers.
+	err = r.cleanupSnapshots(ctx, cr)
+	if err != nil {
+		return microerror.Mask(err)
+	}
 
 	return nil
 }
