@@ -218,7 +218,7 @@ func (r *Resource) buildAzureConfig(ctx context.Context, cluster capiv1alpha3.Cl
 	}
 
 	{
-		cluster, err := r.newCluster(cluster, azureCluster, workers)
+		cluster, err := r.newCluster(cluster, azureCluster, masters, workers)
 		if err != nil {
 			return providerv1alpha1.AzureConfig{}, microerror.Mask(err)
 		}
@@ -309,7 +309,7 @@ func (r *Resource) buildAzureConfig(ctx context.Context, cluster capiv1alpha3.Cl
 	return azureConfig, nil
 }
 
-func (r *Resource) newCluster(cluster capiv1alpha3.Cluster, azureCluster capzv1alpha3.AzureCluster, workers []capzv1alpha3.AzureMachine) (providerv1alpha1.Cluster, error) {
+func (r *Resource) newCluster(cluster capiv1alpha3.Cluster, azureCluster capzv1alpha3.AzureCluster, masters []capzv1alpha3.AzureMachine, workers []capzv1alpha3.AzureMachine) (providerv1alpha1.Cluster, error) {
 	commonCluster := providerv1alpha1.Cluster{}
 
 	{
@@ -382,8 +382,7 @@ func (r *Resource) newCluster(cluster capiv1alpha3.Cluster, azureCluster capzv1a
 	}
 
 	{
-		// TODO switch back to 1.
-		commonCluster.Masters = newSpecClusterMasterNodes(3)
+		commonCluster.Masters = newSpecClusterMasterNodes(len(masters))
 		commonCluster.Workers = newSpecClusterWorkerNodes(len(workers))
 	}
 
