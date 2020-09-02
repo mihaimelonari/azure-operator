@@ -144,7 +144,14 @@ join-cluster(){
     echo "Node ${ETCD_NAME} joined the ETCD cluster"
     echo "Updating ENV file in /var/lib/etcd/cluster-environment"
     
-    echo -e "ETCD_NAME=${ETCD_NAME}\nETCD_INITIAL_CLUSTER=\nETCD_INITIAL_CLUSTER_STATE=existing\n" | tee /var/lib/etcd/cluster-environment
+    ENV="ETCD_NAME=${ETCD_NAME}"
+    ENV="${ENV}\nETCD_INITIAL_CLUSTER="
+    ENV="${ENV}\nETCD_INITIAL_CLUSTER_STATE=existing"
+    ENV="${ENV}\nETCD_PEER_CA_PATH=/var/lib/etcd/ssl/peer-ca.pem"
+    ENV="${ENV}\nETCD_PEER_CERT_PATH=/var/lib/etcd/ssl/peer-crt.pem"
+    ENV="${ENV}\nETCD_PEER_KEY_PATH=/var/lib/etcd/ssl/peer-key.pem"
+
+    echo -e "$ENV" | tee /var/lib/etcd/cluster-environment
     
     echo 'ENV file updated'
 }

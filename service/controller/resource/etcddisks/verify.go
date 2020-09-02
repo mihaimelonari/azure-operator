@@ -83,6 +83,9 @@ func (r *Resource) verifyPrerequisites(ctx context.Context, cr v1alpha1.AzureCon
 			return false, microerror.Mask(err)
 		}
 
+		// TODO This function counts ANY disk with the right tags.
+		// In case of scaling, this might be wrong.
+		// Detect if the *right* disks exist instead.
 		for iterator.NotDone() {
 			disk := iterator.Value()
 
@@ -134,6 +137,7 @@ func (r *Resource) verifyPrerequisites(ctx context.Context, cr v1alpha1.AzureCon
 		ready = false
 		r.logger.LogCtx(ctx, "level", "warning", "message", fmt.Sprintf("Expected %d disks in 'Succeeded' state, %d found", membersDesiredCount, readyDisks))
 
+		// Trigger creation of missing disks.
 		err = r.ensureDisks(ctx, cr, membersDesiredCount, difference(desiredAZs, existingAZs))
 		if err != nil {
 			return false, microerror.Mask(err)
