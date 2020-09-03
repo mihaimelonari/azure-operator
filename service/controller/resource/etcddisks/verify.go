@@ -7,6 +7,7 @@ import (
 	"github.com/giantswarm/apiextensions/pkg/apis/provider/v1alpha1"
 	"github.com/giantswarm/microerror"
 
+	"github.com/giantswarm/azure-operator/v4/pkg/project"
 	"github.com/giantswarm/azure-operator/v4/service/controller/key"
 )
 
@@ -31,6 +32,11 @@ func (r *Resource) verifyPrerequisites(ctx context.Context, cr v1alpha1.AzureCon
 		membersDesiredCount = 3
 	}
 
+	vmssClient, err := r.clientFactory.GetVirtualMachineScaleSetsClient(cr.Spec.Azure.CredentialSecret.Namespace, cr.Spec.Azure.CredentialSecret.Name)
+	if err != nil {
+		return false, microerror.Mask(err)
+	}
+
 	vmssVMsClient, err := r.clientFactory.GetVirtualMachineScaleSetVMsClient(cr.Spec.Azure.CredentialSecret.Namespace, cr.Spec.Azure.CredentialSecret.Name)
 	if err != nil {
 		return false, microerror.Mask(err)
@@ -45,7 +51,20 @@ func (r *Resource) verifyPrerequisites(ctx context.Context, cr v1alpha1.AzureCon
 	var readyInstances int
 	var desiredAZs []string
 	{
-		// TODO consider an instance ready only if it is running the current version of the azure operator.
+		vmss, err := vmssClient.Get(ctx, key.ResourceGroupName(cr), key.MasterVMSSName(cr))
+		if IsNotFound(err) {
+			r.logger.LogCtx(ctx, "level", "info", "message", "VMSS not found, can't proceed with attachment of disks")
+			return false, nil
+		} else if err != nil {
+			return false, microerror.Mask(err)
+		}
+
+		// If VMSS is running the previous azure operator version, we have to wait for it to be updated by the master resource.
+		if *vmss.Tags[key.OperatorVersionTagName] != project.Version() {
+			r.logger.LogCtx(ctx, "level", "info", "message", "VMSS is outdated, can't proceed with attachment of disks")
+			return false, nil
+		}
+
 		iterator, err := vmssVMsClient.ListComplete(ctx, key.ResourceGroupName(cr), key.MasterVMSSName(cr), "", "", "")
 		if IsNotFound(err) {
 			r.logger.LogCtx(ctx, "level", "info", "message", "VMSS not found, can't proceed with attachment of disks")
@@ -57,15 +76,19 @@ func (r *Resource) verifyPrerequisites(ctx context.Context, cr v1alpha1.AzureCon
 		for iterator.NotDone() {
 			instance := iterator.Value()
 
-			if *instance.ProvisioningState == "Succeeded" {
-				readyInstances = readyInstances + 1
-			}
+			// Check if instance is up to date.
+			if *instance.Tags[key.OperatorVersionTagName] == project.Version() {
+				// Check if instance is provisioned.
+				if *instance.ProvisioningState == "Succeeded" {
+					readyInstances = readyInstances + 1
+				}
 
-			if len(*instance.Zones) > 0 {
-				zone := (*instance.Zones)[0]
+				if len(*instance.Zones) > 0 {
+					zone := (*instance.Zones)[0]
 
-				// Add the zone into the slice (might be a duplicated, that's expected).
-				desiredAZs = append(desiredAZs, zone)
+					// Add the zone into the slice (might be a duplicated, that's expected).
+					desiredAZs = append(desiredAZs, zone)
+				}
 			}
 
 			err := iterator.NextWithContext(ctx)

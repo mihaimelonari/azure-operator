@@ -22,6 +22,7 @@ const (
 	clusterTagName            = "GiantSwarmCluster"
 	installationTagName       = "GiantSwarmInstallation"
 	organizationTagName       = "GiantSwarmOrganization"
+	OperatorVersionTagName    = "gs-azure-operator.giantswarm.io-version"
 	MastersVmssDeploymentName = "masters-vmss-template"
 	WorkersVmssDeploymentName = "workers-vmss-template"
 

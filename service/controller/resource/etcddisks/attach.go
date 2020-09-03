@@ -3,6 +3,7 @@ package etcddisks
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-07-01/compute"
 	"github.com/Azure/go-autorest/autorest/to"
@@ -40,6 +41,10 @@ func (r *Resource) attachDisks(ctx context.Context, cr v1alpha1.AzureConfig) err
 			for _, dataDisk := range *instance.StorageProfile.DataDisks {
 				// We assume etcd disk is the only one attached to lun 0.
 				if *dataDisk.Lun == 0 {
+					if !strings.HasPrefix(*dataDisk.Name, "etcd") {
+						r.logger.LogCtx(ctx, "level", "info", "warning", fmt.Sprintf("Found that instance %s has a disk on lun 0 but it's not a valid one. Aborting.", *instance.InstanceID))
+						return nil
+					}
 					r.logger.LogCtx(ctx, "level", "info", "message", fmt.Sprintf("Found that instance %s has a disk on lun 0", *instance.InstanceID))
 					diskName = *dataDisk.Name
 					break

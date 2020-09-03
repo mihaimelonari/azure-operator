@@ -5,6 +5,7 @@ import (
 
 	"github.com/coreos/go-semver/semver"
 	"github.com/giantswarm/microerror"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/giantswarm/azure-operator/v4/pkg/label"
@@ -16,7 +17,7 @@ import (
 // corresponding azure-operator version from node labels. If node doesn't have
 // this label or was created with older version than currently reconciling one,
 // then this function returns true. Otherwise (including on error) false.
-func AnyOutOfDate(ctx context.Context) (bool, error) {
+func AnyOutOfDate(ctx context.Context, nodeFilterFunc func(n corev1.Node) bool) (bool, error) {
 	cc, err := controllercontext.FromContext(ctx)
 	if err != nil {
 		return false, microerror.Mask(err)
@@ -33,6 +34,9 @@ func AnyOutOfDate(ctx context.Context) (bool, error) {
 
 	myVersion := semver.New(project.Version())
 	for _, n := range nodeList.Items {
+		if !nodeFilterFunc(n) {
+			continue
+		}
 		v, exists := n.GetLabels()[label.OperatorVersion]
 		if !exists {
 			return true, nil
