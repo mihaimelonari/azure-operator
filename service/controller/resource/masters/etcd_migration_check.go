@@ -28,18 +28,21 @@ func (r *Resource) etcdMigrationCheckTransition(ctx context.Context, obj interfa
 		return "", microerror.Mask(err)
 	}
 
-	// 1) upgrade the Master VMSS instance
-	if !*instance.LatestModelApplied {
+	// Check if instance still has the old disk attached.
+	needsUpdate := false
+	for _, disk := range *instance.StorageProfile.DataDisks {
+		if to.Int32(disk.Lun) == 0 && *disk.Name != "etcd1" {
+			needsUpdate = true
+		}
+	}
+
+	if needsUpdate {
+		// Update the Master VMSS instance
 		r.Logger.LogCtx(ctx, "level", "info", "message", "Updating Master VMSS instance.")
 		ids := to.StringSlicePtr([]string{
 			*instance.InstanceID,
 		})
-		future, err := vmssClient.UpdateInstances(ctx, key.ResourceGroupName(cr), key.MasterVMSSName(cr), compute.VirtualMachineScaleSetVMInstanceRequiredIDs{InstanceIds: ids})
-		if err != nil {
-			return "", microerror.Mask(err)
-		}
-
-		err = future.WaitForCompletionRef(ctx, vmssClient.Client)
+		_, err := vmssClient.UpdateInstances(ctx, key.ResourceGroupName(cr), key.MasterVMSSName(cr), compute.VirtualMachineScaleSetVMInstanceRequiredIDs{InstanceIds: ids})
 		if err != nil {
 			return "", microerror.Mask(err)
 		}
@@ -57,9 +60,8 @@ func (r *Resource) etcdMigrationCheckTransition(ctx context.Context, obj interfa
 	}
 
 	if *instance.ProvisioningState == "Succeeded" {
-		// If the VM has only 2 disks it is already reimaged.
+		// Instance is ready to be started again.
 		r.Logger.LogCtx(ctx, "level", "info", "message", "Starting Master VMSS instance.")
-		// 3) start the Master VMSS instance
 		ids := &compute.VirtualMachineScaleSetVMInstanceIDs{
 			InstanceIds: to.StringSlicePtr([]string{
 				*instance.InstanceID,

@@ -39,7 +39,7 @@ func (r *Resource) attachDisks(ctx context.Context, cr v1alpha1.AzureConfig) err
 			diskName := ""
 			// Check if VM has an ETCD disk attached.
 			for _, dataDisk := range *instance.StorageProfile.DataDisks {
-				// We assume etcd disk is the only one attached to lun 0.
+				// We check if there is a disk attached to lun 0 and is not a leftover from previous releases.
 				if *dataDisk.Lun == 0 {
 					if !strings.HasPrefix(*dataDisk.Name, "etcd") {
 						r.logger.LogCtx(ctx, "level", "info", "warning", fmt.Sprintf("Found that instance %s has a disk on lun 0 but it's not a valid one. Aborting.", *instance.InstanceID))
