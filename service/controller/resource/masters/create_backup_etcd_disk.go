@@ -121,14 +121,15 @@ func (r *Resource) stopMastersTransition(ctx context.Context, obj interface{}, c
 
 		if !isStopped {
 			r.Logger.LogCtx(ctx, "level", "debug", "message", "Waiting for VMSS instance to be stopped.")
+			// TODO touch CR to trigger a new reconciliation loop.
 			return currentState, nil
 		}
 	}
 
-	return CreateSnapshot, nil
+	return EnsureSnapshot, nil
 }
 
-func (r *Resource) createSnapshotTransition(ctx context.Context, obj interface{}, currentState state.State) (state.State, error) {
+func (r *Resource) ensureSnapshotTransition(ctx context.Context, obj interface{}, currentState state.State) (state.State, error) {
 	cr, err := key.ToCustomResource(obj)
 	if err != nil {
 		return "", microerror.Mask(err)
@@ -142,6 +143,7 @@ func (r *Resource) createSnapshotTransition(ctx context.Context, obj interface{}
 
 	if !snapshotReady {
 		r.Logger.LogCtx(ctx, "level", "debug", "message", "Waiting for VMSS's ETCD disk snapshot to be ready.")
+		// TODO touch CR to trigger a new reconciliation loop.
 		return currentState, nil
 	}
 

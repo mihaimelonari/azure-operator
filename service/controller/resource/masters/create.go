@@ -17,15 +17,22 @@ func (r *Resource) createStateMachine() state.Machine {
 		Logger:       r.Logger,
 		ResourceName: Name,
 		Transitions: state.TransitionMap{
-			Empty:                          r.emptyStateTransition,
-			BackupETCDDisk:                 r.backupETCDDiskTransition,
-			WaitForMastersToDrain:          r.waitForMasterToDrainTransition,
-			StopMasters:                    r.stopMastersTransition,
-			CreateSnapshot:                 r.createSnapshotTransition,
-			DeploymentUninitialized:        r.deploymentUninitializedTransition,
-			DeploymentInitialized:          r.deploymentInitializedTransition,
-			ProvisioningSuccessful:         r.provisioningSuccessfulTransition,
-			ETCDMigrationCheck:             r.etcdMigrationCheckTransition,
+			Empty: r.emptyStateTransition,
+			// New steps needed by the ETCD migration.
+			BackupETCDDisk:        r.backupETCDDiskTransition,
+			WaitForMastersToDrain: r.waitForMasterToDrainTransition,
+			StopMasters:           r.stopMastersTransition,
+			EnsureSnapshot:        r.ensureSnapshotTransition,
+
+			DeploymentUninitialized: r.deploymentUninitializedTransition,
+			DeploymentInitialized:   r.deploymentInitializedTransition,
+			ProvisioningSuccessful:  r.provisioningSuccessfulTransition,
+
+			// New steps needed by the ETCD migration.
+			UpdateMaster:  r.updateMasterTransition,
+			ReimageMaster: r.reimageMasterTransition,
+			StartMaster:   r.startMasterTransition,
+
 			ClusterUpgradeRequirementCheck: r.clusterUpgradeRequirementCheckTransition,
 			MasterInstancesUpgrading:       r.masterInstancesUpgradingTransition,
 			WaitForMastersToBecomeReady:    r.waitForMastersToBecomeReadyTransition,

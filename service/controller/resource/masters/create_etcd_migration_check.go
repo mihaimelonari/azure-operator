@@ -12,7 +12,7 @@ import (
 	"github.com/giantswarm/azure-operator/v4/service/controller/key"
 )
 
-func (r *Resource) etcdMigrationCheckTransition(ctx context.Context, obj interface{}, currentState state.State) (state.State, error) {
+func (r *Resource) updateMasterTransition(ctx context.Context, obj interface{}, currentState state.State) (state.State, error) {
 	cr, err := key.ToCustomResource(obj)
 	if err != nil {
 		return "", microerror.Mask(err)
@@ -48,15 +48,56 @@ func (r *Resource) etcdMigrationCheckTransition(ctx context.Context, obj interfa
 		}
 
 		r.Logger.LogCtx(ctx, "level", "info", "message", "Updated Master VMSS instance.")
+	}
 
-		r.Logger.LogCtx(ctx, "level", "info", "message", "Reimaging Master VMSS instance.")
-		// 2) reimage the Master VMSS instance
-		_, err = vmssClient.Reimage(ctx, key.ResourceGroupName(cr), key.MasterVMSSName(cr), &compute.VirtualMachineScaleSetReimageParameters{InstanceIds: ids})
-		if err != nil {
-			return "", microerror.Mask(err)
-		}
-		r.Logger.LogCtx(ctx, "level", "info", "message", "Reimaged Master VMSS instance.")
-		return currentState, nil
+	return ReimageMaster, nil
+}
+
+func (r *Resource) reimageMasterTransition(ctx context.Context, obj interface{}, currentState state.State) (state.State, error) {
+	cr, err := key.ToCustomResource(obj)
+	if err != nil {
+		return "", microerror.Mask(err)
+	}
+
+	vmssClient, err := r.ClientFactory.GetVirtualMachineScaleSetsClient(cr.Spec.Azure.CredentialSecret.Namespace, cr.Spec.Azure.CredentialSecret.Name)
+	if err != nil {
+		return "", microerror.Mask(err)
+	}
+
+	instance, err := r.getFirstMasterVMSSInstance(ctx, cr)
+	if err != nil {
+		return "", microerror.Mask(err)
+	}
+
+	// Update the Master VMSS instance
+	ids := to.StringSlicePtr([]string{
+		*instance.InstanceID,
+	})
+
+	r.Logger.LogCtx(ctx, "level", "info", "message", "Reimaging Master VMSS instance.")
+	// 2) reimage the Master VMSS instance
+	_, err = vmssClient.Reimage(ctx, key.ResourceGroupName(cr), key.MasterVMSSName(cr), &compute.VirtualMachineScaleSetReimageParameters{InstanceIds: ids})
+	if err != nil {
+		return "", microerror.Mask(err)
+	}
+	r.Logger.LogCtx(ctx, "level", "info", "message", "Reimaged Master VMSS instance.")
+	return StartMaster, nil
+}
+
+func (r *Resource) startMasterTransition(ctx context.Context, obj interface{}, currentState state.State) (state.State, error) {
+	cr, err := key.ToCustomResource(obj)
+	if err != nil {
+		return "", microerror.Mask(err)
+	}
+
+	vmssClient, err := r.ClientFactory.GetVirtualMachineScaleSetsClient(cr.Spec.Azure.CredentialSecret.Namespace, cr.Spec.Azure.CredentialSecret.Name)
+	if err != nil {
+		return "", microerror.Mask(err)
+	}
+
+	instance, err := r.getFirstMasterVMSSInstance(ctx, cr)
+	if err != nil {
+		return "", microerror.Mask(err)
 	}
 
 	if *instance.ProvisioningState == "Succeeded" {
