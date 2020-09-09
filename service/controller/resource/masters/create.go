@@ -18,7 +18,10 @@ func (r *Resource) createStateMachine() state.Machine {
 		ResourceName: Name,
 		Transitions: state.TransitionMap{
 			Empty:                          r.emptyStateTransition,
-			BackupETCDDisk:                 r.backupETCDDisk,
+			BackupETCDDisk:                 r.backupETCDDiskTransition,
+			WaitForMastersToDrain:          r.waitForMasterToDrainTransition,
+			StopMasters:                    r.stopMastersTransition,
+			CreateSnapshot:                 r.createSnapshotTransition,
 			DeploymentUninitialized:        r.deploymentUninitializedTransition,
 			DeploymentInitialized:          r.deploymentInitializedTransition,
 			ProvisioningSuccessful:         r.provisioningSuccessfulTransition,

@@ -8,6 +8,9 @@ const (
 
 	// States
 	BackupETCDDisk                 = "BackupETCDDisk"
+	WaitForMastersToDrain          = "WaitForMastersToDrain"
+	StopMasters                    = "StopMasters"
+	CreateSnapshot                 = "CreateSnapshot"
 	ClusterUpgradeRequirementCheck = "ClusterUpgradeRequirementCheck"
 	DeploymentUninitialized        = "DeploymentUninitialized"
 	DeploymentInitialized          = "DeploymentInitialized"

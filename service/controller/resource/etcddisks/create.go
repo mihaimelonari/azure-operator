@@ -14,6 +14,12 @@ func (r *Resource) EnsureCreated(ctx context.Context, obj interface{}) error {
 		return microerror.Mask(err)
 	}
 
+	// Cleanup any snapshot leftovers.
+	err = r.cleanupSnapshots(ctx, cr)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
 	// Check if all needed resources are ready for the ETCD cluster to be set up.
 	ready, err := r.verifyPrerequisites(ctx, cr)
 	if err != nil {
@@ -27,12 +33,6 @@ func (r *Resource) EnsureCreated(ctx context.Context, obj interface{}) error {
 
 	// Setup the ETCD cluster.
 	err = r.attachDisks(ctx, cr)
-	if err != nil {
-		return microerror.Mask(err)
-	}
-
-	// Cleanup any snapshot leftovers.
-	err = r.cleanupSnapshots(ctx, cr)
 	if err != nil {
 		return microerror.Mask(err)
 	}

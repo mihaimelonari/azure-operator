@@ -8,8 +8,10 @@ import (
 	"github.com/Azure/go-autorest/autorest/to"
 	providerv1alpha1 "github.com/giantswarm/apiextensions/pkg/apis/provider/v1alpha1"
 	"github.com/giantswarm/microerror"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/giantswarm/azure-operator/v4/pkg/label"
 	"github.com/giantswarm/azure-operator/v4/service/controller/controllercontext"
 	"github.com/giantswarm/azure-operator/v4/service/controller/internal/state"
 	"github.com/giantswarm/azure-operator/v4/service/controller/key"
@@ -22,41 +24,92 @@ const (
 	SnapshotDiskNameLabel = "gs-disk-name"
 )
 
-func (r *Resource) backupETCDDisk(ctx context.Context, obj interface{}, currentState state.State) (state.State, error) {
+func (r *Resource) backupETCDDiskTransition(ctx context.Context, obj interface{}, currentState state.State) (state.State, error) {
 	cr, err := key.ToCustomResource(obj)
 	if err != nil {
 		return "", microerror.Mask(err)
 	}
 
-	// Remove master node from the k8s nodes list.
+	// Drain all master nodes.
 	// This is needed to get the node labels updated at next reboot.
-	{
-		cc, err := controllercontext.FromContext(ctx)
+	cc, err := controllercontext.FromContext(ctx)
+	if err != nil {
+		return "", microerror.Mask(err)
+	}
+
+	if cc.Client.TenantCluster.K8s != nil {
+		r.Logger.LogCtx(ctx, "level", "debug", "message", "Draining master nodes.")
+
+		nodeList, err := cc.Client.TenantCluster.K8s.CoreV1().Nodes().List(metav1.ListOptions{})
 		if err != nil {
 			return "", microerror.Mask(err)
 		}
 
-		if cc.Client.TenantCluster.K8s != nil {
-			r.Logger.LogCtx(ctx, "level", "debug", "message", "Deleting master nodes from the k8s API.")
-
-			nodeList, err := cc.Client.TenantCluster.K8s.CoreV1().Nodes().List(metav1.ListOptions{})
-			if err != nil {
-				return "", microerror.Mask(err)
-			}
-
-			for _, node := range nodeList.Items {
-				if isMaster(node) {
-					r.Logger.LogCtx(ctx, "level", "debug", "message", fmt.Sprintf("Deleting node %s from the k8s API.", node.Name))
-					err = cc.Client.TenantCluster.K8s.CoreV1().Nodes().Delete(node.Name, &metav1.DeleteOptions{})
-					if err != nil {
-						return "", microerror.Mask(err)
-					}
-					r.Logger.LogCtx(ctx, "level", "debug", "message", fmt.Sprintf("Deleted node %s from the k8s API.", node.Name))
+		for _, node := range nodeList.Items {
+			if isMaster(node) {
+				r.Logger.LogCtx(ctx, "level", "debug", "message", fmt.Sprintf("Creating DrainerConfig for node %s.", node.Name))
+				err = r.CreateDrainerConfig(ctx, cr, node.Name)
+				if err != nil {
+					return "", microerror.Mask(err)
 				}
+				r.Logger.LogCtx(ctx, "level", "debug", "message", fmt.Sprintf("Created DrainerConfig for node %s.", node.Name))
 			}
-
-			r.Logger.LogCtx(ctx, "level", "debug", "message", "Deleted master nodes from the k8s API.")
 		}
+
+		r.Logger.LogCtx(ctx, "level", "debug", "message", "DrainerConfigs created for master nodes")
+	} else {
+		// Unable to connect to the k8s API.
+		return "", nil
+	}
+
+	return WaitForMastersToDrain, nil
+}
+
+func (r *Resource) waitForMasterToDrainTransition(ctx context.Context, obj interface{}, currentState state.State) (state.State, error) {
+	cr, err := key.ToCustomResource(obj)
+	if err != nil {
+		return "", microerror.Mask(err)
+	}
+
+	n := v1.NamespaceAll
+	o := metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=%s", label.Cluster, key.ClusterID(&cr)),
+	}
+
+	list, err := r.G8sClient.CoreV1alpha1().DrainerConfigs(n).List(o)
+	if err != nil {
+		return "", microerror.Mask(err)
+	}
+
+	pending := false
+	for _, drainerConfig := range list.Items {
+		if drainerConfig.Status.HasDrainedCondition() || drainerConfig.Status.HasTimeoutCondition() {
+			err := r.G8sClient.CoreV1alpha1().DrainerConfigs(drainerConfig.GetNamespace()).Delete(drainerConfig.GetName(), &metav1.DeleteOptions{})
+			if IsNotFound(err) {
+				r.Logger.LogCtx(ctx, "level", "debug", "message", "did not delete drainer config for tenant cluster node")
+				r.Logger.LogCtx(ctx, "level", "debug", "message", "drainer config for tenant cluster node does not exist")
+			} else if err != nil {
+				return "", microerror.Mask(err)
+			} else {
+				r.Logger.LogCtx(ctx, "level", "debug", "message", "deleted drainer config for tenant cluster master")
+			}
+		} else {
+			pending = true
+		}
+	}
+
+	if pending {
+		r.Logger.LogCtx(ctx, "level", "debug", "message", "master node still pending draining")
+		return currentState, nil
+	}
+
+	return StopMasters, nil
+}
+
+func (r *Resource) stopMastersTransition(ctx context.Context, obj interface{}, currentState state.State) (state.State, error) {
+	cr, err := key.ToCustomResource(obj)
+	if err != nil {
+		return "", microerror.Mask(err)
 	}
 
 	// Ensure VMSS instance is stopped.
@@ -72,17 +125,24 @@ func (r *Resource) backupETCDDisk(ctx context.Context, obj interface{}, currentS
 		}
 	}
 
-	// Create a snapshot of the disk attached to lun0.
-	{
-		snapshotReady, err := r.isSnapshotReady(ctx, cr)
-		if err != nil {
-			return "", microerror.Mask(err)
-		}
+	return CreateSnapshot, nil
+}
 
-		if !snapshotReady {
-			r.Logger.LogCtx(ctx, "level", "debug", "message", "Waiting for VMSS's ETCD disk snapshot to be ready.")
-			return currentState, nil
-		}
+func (r *Resource) createSnapshotTransition(ctx context.Context, obj interface{}, currentState state.State) (state.State, error) {
+	cr, err := key.ToCustomResource(obj)
+	if err != nil {
+		return "", microerror.Mask(err)
+	}
+
+	// Create a snapshot of the disk attached to lun0.
+	snapshotReady, err := r.isSnapshotReady(ctx, cr)
+	if err != nil {
+		return "", microerror.Mask(err)
+	}
+
+	if !snapshotReady {
+		r.Logger.LogCtx(ctx, "level", "debug", "message", "Waiting for VMSS's ETCD disk snapshot to be ready.")
+		return currentState, nil
 	}
 
 	// Go on with the state machine.
