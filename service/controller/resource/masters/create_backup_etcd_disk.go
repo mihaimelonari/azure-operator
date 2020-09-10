@@ -273,19 +273,19 @@ func (r *Resource) isVMSSInstanceStopped(ctx context.Context, cr providerv1alpha
 
 	for _, stateObj := range *instanceView.Statuses {
 		if *stateObj.Code == "PowerState/deallocated" {
-			r.Logger.LogCtx(ctx, "level", "error", "message", "First Master VMSS instance's is deallocated.")
+			r.Logger.LogCtx(ctx, "level", "info", "message", "First Master VMSS instance's is deallocated.")
 			return true, nil
 		}
 	}
 
-	r.Logger.LogCtx(ctx, "level", "error", "message", "Deallocating first Master VMSS instance")
+	r.Logger.LogCtx(ctx, "level", "info", "message", "Deallocating first Master VMSS instance")
 
 	_, err = vmssVMsClient.Deallocate(ctx, key.ResourceGroupName(cr), key.MasterVMSSName(cr), *instance.InstanceID)
 	if err != nil {
 		return false, microerror.Mask(err)
 	}
 
-	r.Logger.LogCtx(ctx, "level", "error", "message", "Deallocated first Master VMSS instance")
+	r.Logger.LogCtx(ctx, "level", "info", "message", "Deallocated first Master VMSS instance")
 
 	// Wait for next reconciliation loop.
 	return false, nil
