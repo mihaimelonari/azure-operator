@@ -116,6 +116,10 @@ func (r *Resource) startMasterTransition(ctx context.Context, obj interface{}, c
 		r.Logger.LogCtx(ctx, "level", "info", "message", "Started Master VMSS instance.")
 	} else {
 		r.Logger.LogCtx(ctx, "level", "info", "message", fmt.Sprintf("Instance is in state %s: waiting", *instance.ProvisioningState))
+		err = r.touchCR(ctx, cr)
+		if err != nil {
+			r.Logger.LogCtx(ctx, "level", "warning", "message", fmt.Sprintf("Error touching the CR. %s", err))
+		}
 		return currentState, nil
 	}
 

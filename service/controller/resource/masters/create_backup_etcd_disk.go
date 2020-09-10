@@ -121,7 +121,10 @@ func (r *Resource) stopMastersTransition(ctx context.Context, obj interface{}, c
 
 		if !isStopped {
 			r.Logger.LogCtx(ctx, "level", "debug", "message", "Waiting for VMSS instance to be stopped.")
-			// TODO touch CR to trigger a new reconciliation loop.
+			err = r.touchCR(ctx, cr)
+			if err != nil {
+				r.Logger.LogCtx(ctx, "level", "warning", "message", fmt.Sprintf("Error touching the CR. %s", err))
+			}
 			return currentState, nil
 		}
 	}
@@ -143,7 +146,10 @@ func (r *Resource) ensureSnapshotTransition(ctx context.Context, obj interface{}
 
 	if !snapshotReady {
 		r.Logger.LogCtx(ctx, "level", "debug", "message", "Waiting for VMSS's ETCD disk snapshot to be ready.")
-		// TODO touch CR to trigger a new reconciliation loop.
+		err = r.touchCR(ctx, cr)
+		if err != nil {
+			r.Logger.LogCtx(ctx, "level", "warning", "message", fmt.Sprintf("Error touching the CR. %s", err))
+		}
 		return currentState, nil
 	}
 
