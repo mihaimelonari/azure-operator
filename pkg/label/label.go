@@ -5,7 +5,9 @@ const (
 )
 
 const (
+	Certificate   = "giantswarm.io/certificate"
 	Cluster       = "giantswarm.io/cluster"
+	ManagedBy     = "giantswarm.io/managed-by"
 	Organization  = "giantswarm.io/organization"
 	Provider      = "giantswarm.io/provider"
 	VersionBundle = "giantswarm.io/version-bundle"

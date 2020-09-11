@@ -301,6 +301,14 @@ func DNSZones(customObject providerv1alpha1.AzureConfig) providerv1alpha1.AzureC
 	return customObject.Spec.Azure.DNSZones
 }
 
+func ETCDCertConfigName(clusterID string, cert string) string {
+	return fmt.Sprintf("%s-%s", clusterID, string(cert))
+}
+
+func ETCDMemberDnsName(cr providerv1alpha1.AzureConfig, cert string) string {
+	return fmt.Sprintf("%s.%s.%s", string(cert), DNSZonePrefixEtcd(cr), cr.Spec.Azure.DNSZones.Etcd.Name)
+}
+
 // IsClusterCreating check if the cluster is being created.
 func IsClusterCreating(cr providerv1alpha1.AzureConfig) bool {
 	// When cluster creation is in the beginning, it doesn't necessarily have

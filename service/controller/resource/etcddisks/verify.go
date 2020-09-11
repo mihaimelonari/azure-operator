@@ -47,6 +47,30 @@ func (r *Resource) verifyPrerequisites(ctx context.Context, cr v1alpha1.AzureCon
 		return false, microerror.Mask(err)
 	}
 
+	// Check number of certificates.
+	var readyCertificates int
+	{
+		r.logger.LogCtx(ctx, "level", "info", "message", "Checking availability of certificates for ETCD members")
+		for i := 1; i <= membersDesiredCount; i += 1 {
+			memberName := fmt.Sprintf("etcd%d", i)
+			// Ensure the CertConfig for this member's certificate exists.
+			_, err := r.ensureCertconfig(ctx, cr, memberName)
+			if err != nil {
+				return false, microerror.Mask(err)
+			}
+
+			// Retrieve the certificate for this member.
+			_, err = r.getTLSPeerCert(ctx, cr, memberName)
+			if err != nil {
+				// Assuming certificate is not available.
+				continue
+			}
+
+			readyCertificates = readyCertificates + 1
+		}
+		r.logger.LogCtx(ctx, "level", "info", "message", "Checked availability of certificates for ETCD members")
+	}
+
 	// Count the number of Succeeded VMSS master instances.
 	var readyInstances int
 	var desiredAZs []string
@@ -130,20 +154,6 @@ func (r *Resource) verifyPrerequisites(ctx context.Context, cr v1alpha1.AzureCon
 			if err != nil {
 				return false, microerror.Mask(err)
 			}
-		}
-	}
-
-	// Check number of certificates.
-	var readyCertificates int
-	{
-		for i := 1; i <= membersDesiredCount; i += 1 {
-			_, err := r.getTLSPeerCert(ctx, cr, fmt.Sprintf("etcd%d", i))
-			if err != nil {
-				// Assuming certificate is not available.
-				continue
-			}
-
-			readyCertificates = readyCertificates + 1
 		}
 	}
 
