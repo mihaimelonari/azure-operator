@@ -75,6 +75,12 @@
         "description": "Output value of the worker subnet name as referenced from the virtual network setup."
       }
     },
+    "subnet6Name": {
+      "type": "string",
+      "metadata": {
+        "description": "Output value of the IPv6 subnet name as referenced from the virtual network setup."
+      }
+    },
     "osImagePublisher": {
       "type": "string",
       "metadata": {
@@ -148,6 +154,7 @@
     "roleAssignmentName": "[guid(concat(resourceGroup().id, '-', variables('vmssName'), '-', 'roleassignment'))]",
     "sshUser": "giantswarm",
     "subnetResourceId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('subnetName'))]",
+    "subnet6ResourceId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('subnet6Name'))]",
     "vmssName": "[parameters('nodepoolName')]",
     "vmssExtensions": [
       {
@@ -258,8 +265,18 @@
                     {
                       "name": "[concat(variables('vmssName'), '-ipconfig')]",
                       "properties": {
+                        "privateIPAddressVersion": "IPv4",
                         "subnet": {
                           "id": "[variables('subnetResourceId')]"
+                        }
+                      }
+                    },
+                    {
+                      "name": "[concat(variables('vmssName'), '-ipconfig6')]",
+                      "properties": {
+                        "privateIPAddressVersion": "IPv6",
+                        "subnet": {
+                          "id": "[variables('subnet6ResourceId')]"
                         }
                       }
                     }

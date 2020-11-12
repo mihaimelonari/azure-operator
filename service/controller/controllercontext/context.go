@@ -16,14 +16,16 @@ type contextKey string
 const controllerKey contextKey = "controller"
 
 type Context struct {
-	MasterLBBackendPoolID string
-	AzureClientSet        *client.AzureClientSet
-	Client                ContextClient
-	CloudConfig           cloudconfig.Interface
-	ContainerURL          *azblob.ContainerURL
-	MasterSubnetID        string
-	Release               ContextRelease
-	WorkerSubnetID        string
+	MasterLBBackendPoolID     string
+	MasterLBBackendPoolIPv6ID string
+	AzureClientSet            *client.AzureClientSet
+	Client                    ContextClient
+	CloudConfig               cloudconfig.Interface
+	ContainerURL              *azblob.ContainerURL
+	MasterSubnetID            string
+	Release                   ContextRelease
+	Subnet6ID                 string
+	WorkerSubnetID            string
 }
 
 type ContextRelease struct {
@@ -34,11 +36,17 @@ func (c *Context) Validate() error {
 	if c.MasterLBBackendPoolID == "" {
 		return microerror.Maskf(invalidContextError, "%T.MasterLBBackendPoolID must not be empty", c)
 	}
+	if c.MasterLBBackendPoolIPv6ID == "" {
+		return microerror.Maskf(invalidContextError, "%T.MasterLBBackendPoolIPv6ID must not be empty", c)
+	}
 	if c.MasterSubnetID == "" {
 		return microerror.Maskf(invalidContextError, "%T.MasterSubnetID must not be empty", c)
 	}
 	if c.WorkerSubnetID == "" {
 		return microerror.Maskf(invalidContextError, "%T.WorkerSubnetID must not be empty", c)
+	}
+	if c.Subnet6ID == "" {
+		return microerror.Maskf(invalidContextError, "%T.Subnet6ID must not be empty", c)
 	}
 
 	return nil

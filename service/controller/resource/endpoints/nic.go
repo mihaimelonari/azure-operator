@@ -29,18 +29,16 @@ func (r *Resource) getMasterNICPrivateIPs(ctx context.Context, resourceGroupName
 	for result.NotDone() {
 		values := result.Values()
 		for _, networkInterface := range values {
-			ipConfigurations := *networkInterface.IPConfigurations
-			if len(ipConfigurations) != 1 {
-				return nil, microerror.Mask(incorrectNumberNetworkInterfacesError)
-			}
+			for _, ipconf := range *networkInterface.IPConfigurations {
+				if ipconf.PrivateIPAddressVersion == network.IPv4 {
+					privateIP := *ipconf.PrivateIPAddress
+					if privateIP == "" {
+						return nil, microerror.Mask(privateIPAddressEmptyError)
+					}
 
-			ipConfiguration := ipConfigurations[0]
-			privateIP := *ipConfiguration.PrivateIPAddress
-			if privateIP == "" {
-				return nil, microerror.Mask(privateIPAddressEmptyError)
+					ips = append(ips, privateIP)
+				}
 			}
-
-			ips = append(ips, privateIP)
 		}
 
 		err := result.Next()

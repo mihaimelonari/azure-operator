@@ -246,7 +246,7 @@
                       "sourcePortRange":"*",
                       "destinationPortRange":"*",
                       "sourceAddressPrefix":"AzureLoadBalancer",
-                      "destinationAddressPrefix":"[parameters('masterSubnetCidr')]",
+                      "destinationAddressPrefix":"VirtualNetwork",
                       "access":"Allow",
                       "direction":"Inbound",
                       "priority":"3902"
@@ -877,7 +877,7 @@
             },
             "virtualNetworksAPIVersion":{
               "type":"string",
-              "defaultValue":"2016-12-01",
+              "defaultValue":"2018-07-01",
               "metadata":{
                 "description":"API version used by the Microsoft.Network/virtualNetworks resource."
               }
@@ -920,6 +920,8 @@
             "virtualNetworkID":"[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]",
             "masterSubnetName":"[concat(parameters('virtualNetworkName'), '-MasterSubnet')]",
             "masterSubnetID":"[concat(variables('virtualNetworkID'), '/subnets/', variables('masterSubnetName'))]",
+            "subnet6Name":"[concat(parameters('virtualNetworkName'), '-subnet6')]",
+            "subnet6ID":"[concat(variables('virtualNetworkID'), '/subnets/', variables('subnet6Name'))]",
             "workerSubnetName":"[concat(parameters('virtualNetworkName'), '-WorkerSubnet')]",
             "workerSubnetID":"[concat(variables('virtualNetworkID'), '/subnets/', variables('workerSubnetName'))]"
           },
@@ -935,10 +937,27 @@
               "properties":{
                 "addressSpace":{
                   "addressPrefixes":[
-                    "[parameters('virtualNetworkCidr')]"
+                    "[parameters('virtualNetworkCidr')]",
+                    "10.255.0.0/16",
+                    "ace:cab:deca::/48"
                   ]
                 },
                 "subnets":[
+                  {
+                    "name":"[variables('subnet6Name')]",
+                    "properties":{
+                      "addressPrefixes":[
+                        "10.255.0.0/16",
+                        "ace:cab:deca:1::/64"
+                      ],
+                      "networkSecurityGroup":{
+                        "id":"[parameters('masterSecurityGroupID')]"
+                      },
+                      "serviceEndpoints": [
+                        { "service": "Microsoft.Storage" }
+                      ]
+                    }
+                  },
                   {
                     "name":"[variables('masterSubnetName')]",
                     "properties":{
@@ -997,6 +1016,10 @@
             "masterSubnetID":{
               "type":"string",
               "value":"[variables('masterSubnetID')]"
+            },
+            "subnet6ID":{
+              "type":"string",
+              "value":"[variables('subnet6ID')]"
             },
             "workerSubnetID":{
               "type":"string",
@@ -1065,7 +1088,7 @@
               }
             },
             "loadBalancersAPIVersion": {
-              "defaultValue": "2018-12-01",
+              "defaultValue": "2019-04-01",
               "type": "String",
               "metadata": {
                 "description": "API version used by the Microsoft.Network/loadBalancers resource."
@@ -1089,7 +1112,9 @@
             "loadBalancerSkuName": "Standard",
             "loadBalancerID": "[resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName'))]",
             "loadBalancerBackendPoolName": "[concat(parameters('clusterID'), '-API-PublicLoadBalancer-BackendPool')]",
+            "loadBalancerBackendPoolV6Name": "[concat(parameters('clusterID'), '-API-PublicLoadBalancer-BackendPool-ipv6')]",
             "loadBalancerBackendPoolID": "[concat(variables('loadBalancerID'),'/backendAddressPools/',variables('loadBalancerBackendPoolName'))]",
+            "loadBalancerBackendPoolV6ID": "[concat(variables('loadBalancerID'),'/backendAddressPools/',variables('loadBalancerBackendPoolV6Name'))]",
             "loadBalancerProbeName": "[concat(parameters('clusterID'), '-API-PublicLoadBalancer-Probe')]",
             "loadBalancerProbeID": "[concat(variables('loadBalancerID'),'/probes/',variables('loadBalancerProbeName'))]",
             "settings": {
@@ -1100,7 +1125,19 @@
                 },
                 "Frontend": {
                   "ID": "[concat(variables('loadBalancerID'),'/frontendIPConfigurations/', concat(parameters('clusterID'), '-API-PublicLoadBalancer-Frontend'))]",
-                  "Name": "[concat(parameters('clusterID'), '-API-PublicLoadBalancer-Frontend')]"
+                  "Name": "[concat(parameters('clusterID'), '-API-PublicLoadBalancer-Frontend')]",
+                  "IPVersion":"IPv4"
+                }
+              },
+              "APIv6": {
+                "PublicIP": {
+                  "ID": "[resourceId('Microsoft.Network/publicIPAddresses', concat(parameters('clusterID'), '-API-PublicLoadBalancer-PublicIP-v6'))]",
+                  "Name": "[concat(parameters('clusterID'), '-API-PublicLoadBalancer-PublicIP-v6')]"
+                },
+                "Frontend": {
+                  "ID": "[concat(variables('loadBalancerID'),'/frontendIPConfigurations/', concat(parameters('clusterID'), '-API-PublicLoadBalancer-Frontend-v6'))]",
+                  "Name": "[concat(parameters('clusterID'), '-API-PublicLoadBalancer-Frontend-v6')]",
+                  "IPVersion":"IPv6"
                 }
               },
               "ETCD": {
@@ -1110,7 +1147,8 @@
                 },
                 "Frontend": {
                   "ID": "[concat(variables('loadBalancerID'),'/frontendIPConfigurations/', concat(parameters('clusterID'), '-ETCD-PublicLoadBalancer-Frontend'))]",
-                  "Name": "[concat(parameters('clusterID'), '-ETCD-PublicLoadBalancer-Frontend')]"
+                  "Name": "[concat(parameters('clusterID'), '-ETCD-PublicLoadBalancer-Frontend')]",
+                  "IPVersion":"IPv4"
                 }
               }
             }
@@ -1130,6 +1168,22 @@
               "properties": {
                 "publicIPAllocationMethod": "Static",
                 "publicIPAddressVersion": "IPv4"
+              }
+            },
+            {
+              "type": "Microsoft.Network/publicIPAddresses",
+              "apiVersion": "[parameters('publicIPAddressesAPIVersion')]",
+              "name": "[variables('settings').APIv6.PublicIP.Name]",
+              "location": "[resourceGroup().location]",
+              "tags": {
+                "provider": "[toUpper(parameters('GiantSwarmTags').provider)]"
+              },
+              "sku": {
+                "name": "[variables('loadBalancerSkuName')]"
+              },
+              "properties": {
+                "publicIPAllocationMethod": "Static",
+                "publicIPAddressVersion": "IPv6"
               }
             },
             {
@@ -1155,6 +1209,7 @@
               "location": "[resourceGroup().location]",
               "dependsOn": [
                 "[concat('Microsoft.Network/publicIPAddresses/', variables('settings').API.PublicIP.Name)]",
+                "[concat('Microsoft.Network/publicIPAddresses/', variables('settings').APIv6.PublicIP.Name)]",
                 "[concat('Microsoft.Network/publicIPAddresses/', variables('settings').ETCD.PublicIP.Name)]"
               ],
               "tags": {
@@ -1168,14 +1223,25 @@
                   {
                     "name": "[variables('settings').API.Frontend.Name]",
                     "properties": {
+                      "privateIPAddressVersion":"[variables('settings').API.Frontend.IPVersion]",
                       "publicIPAddress": {
                         "id": "[variables('settings').API.PublicIP.ID]"
                       }
                     }
                   },
                   {
+                    "name": "[variables('settings').APIv6.Frontend.Name]",
+                    "properties": {
+                      "privateIPAddressVersion":"[variables('settings').APIv6.Frontend.IPVersion]",
+                      "publicIPAddress": {
+                        "id": "[variables('settings').APIv6.PublicIP.ID]"
+                      }
+                    }
+                  },
+                  {
                     "name": "[variables('settings').ETCD.Frontend.Name]",
                     "properties": {
+                      "privateIPAddressVersion":"[variables('settings').ETCD.Frontend.IPVersion]",
                       "publicIPAddress": {
                         "id": "[variables('settings').ETCD.PublicIP.ID]"
                       }
@@ -1184,7 +1250,16 @@
                 ],
                 "backendAddressPools": [
                   {
-                    "name": "[variables('loadBalancerBackendPoolName')]"
+                    "name": "[variables('loadBalancerBackendPoolName')]",
+                    "properties": {
+
+                    }
+                  },
+                  {
+                    "name": "[variables('loadBalancerBackendPoolV6Name')]",
+                    "properties": {
+
+                    }
                   }
                 ],
                 "copy": [
@@ -1198,7 +1273,7 @@
                           "id": "[variables('settings')[parameters('ports')[copyIndex('loadBalancingRules')].suffix].Frontend.ID]"
                         },
                         "backendAddressPool": {
-                          "id": "[variables('loadBalancerBackendPoolID')]"
+                          "id": "[if(equals(parameters('ports')[copyIndex('loadBalancingRules')].suffix, 'APIv6'), variables('loadBalancerBackendPoolV6ID'), variables('loadBalancerBackendPoolID'))]"
                         },
                         "protocol": "[parameters('ports')[copyIndex('loadBalancingRules')].protocol]",
                         "frontendPort": "[parameters('ports')[copyIndex('loadBalancingRules')].frontend]",
@@ -1237,9 +1312,17 @@
               "type": "String",
               "value": "[reference(variables('settings').API.PublicIP.ID, parameters('publicIPAddressesAPIVersion')).ipAddress]"
             },
+            "apiIpv6Address": {
+              "type": "String",
+              "value": "[reference(variables('settings').APIv6.PublicIP.ID, parameters('publicIPAddressesAPIVersion')).ipAddress]"
+            },
             "backendPoolId": {
               "type": "String",
-              "value": "[reference(variables('loadBalancerID')).backendAddressPools[0].id]"
+              "value": "[variables('loadBalancerBackendPoolID')]"
+            },
+            "backendPoolIdV6": {
+              "type": "String",
+              "value": "[variables('loadBalancerBackendPoolV6ID')]"
             }
           }
         },
@@ -1268,6 +1351,24 @@
                 "probeProtocol": "Http",
                 "probePort": 8089,
                 "suffix": "API",
+                "requestPath": "/healthz"
+              },
+              {
+                "protocol":"Tcp",
+                "frontend":443,
+                "backend":443,
+                "probeProtocol": "Http",
+                "probePort": 8089,
+                "suffix": "APIv6",
+                "requestPath": "/healthz"
+              },
+              {
+                "protocol":"Udp",
+                "frontend":60001,
+                "backend":60001,
+                "probeProtocol": "Http",
+                "probePort": 8089,
+                "suffix": "APIv6",
                 "requestPath": "/healthz"
               },
               {
@@ -1311,6 +1412,9 @@
             },
             "ipAddress":{
               "type":"string"
+            },
+            "ipv6Address":{
+              "type":"string"
             }
           },
           "resources":[
@@ -1345,6 +1449,26 @@
                   }
                 ]
               }
+            },
+            {
+              "type":"Microsoft.Network/dnszones/aaaa",
+              "name":"[concat(parameters('dnsZone'), '/', parameters('prefix'))]",
+              "apiVersion":"2018-05-01",
+              "location":"global",
+              "tags":{
+                "provider":"[toUpper(parameters('GiantSwarmTags').provider)]"
+              },
+              "dependsOn":[
+                "[parameters('dnsZone')]"
+              ],
+              "properties":{
+                "TTL":3600,
+                "AAAARecords":[
+                  {
+                    "ipv6Address":"[parameters('ipv6Address')]"
+                  }
+                ]
+              }
             }
           ]
         },
@@ -1360,6 +1484,9 @@
           },
           "ipAddress":{
             "value":"[reference('master_load_balancer_setup').outputs.apiIpAddress.value]"
+          },
+          "ipv6Address":{
+            "value":"[reference('master_load_balancer_setup').outputs.apiIpv6Address.value]"
           }
         }
       }

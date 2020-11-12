@@ -281,6 +281,17 @@ func (r *Resource) enrichControllerContext(ctx context.Context, customObject pro
 	}
 
 	{
+		v, err := r.getDeploymentOutputValue(ctx, deploymentsClient, resourceGroupName, "master_load_balancer_setup", "backendPoolId")
+		if IsNotFound(err) {
+			// fall through
+		} else if err != nil {
+			return microerror.Mask(err)
+		} else {
+			cc.MasterLBBackendPoolIPv6ID = v
+		}
+	}
+
+	{
 		v, err := r.getDeploymentOutputValue(ctx, deploymentsClient, resourceGroupName, "virtual_network_setup", "masterSubnetID")
 		if IsNotFound(err) {
 			// fall through
@@ -288,6 +299,17 @@ func (r *Resource) enrichControllerContext(ctx context.Context, customObject pro
 			return microerror.Mask(err)
 		} else {
 			cc.MasterSubnetID = v
+		}
+	}
+
+	{
+		v, err := r.getDeploymentOutputValue(ctx, deploymentsClient, resourceGroupName, "virtual_network_setup", "subnet6ID")
+		if IsNotFound(err) {
+			// fall through
+		} else if err != nil {
+			return microerror.Mask(err)
+		} else {
+			cc.Subnet6ID = v
 		}
 	}
 

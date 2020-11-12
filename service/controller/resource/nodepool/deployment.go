@@ -105,6 +105,7 @@ func (r Resource) getDesiredDeployment(ctx context.Context, storageAccountsClien
 		},
 		StorageAccountType: azureMachinePool.Spec.Template.OSDisk.ManagedDisk.StorageAccountType,
 		SubnetName:         subnetName,
+		Subnet6Name:        fmt.Sprintf("%s-subnet6", vnetName),
 		VMCustomData:       workerCloudConfig,
 		VMSize:             azureMachinePool.Spec.Template.VMSize,
 		VnetName:           vnetName,

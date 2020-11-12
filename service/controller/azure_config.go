@@ -47,8 +47,6 @@ import (
 	"github.com/giantswarm/azure-operator/v5/service/controller/resource/resourcegroup"
 	"github.com/giantswarm/azure-operator/v5/service/controller/resource/service"
 	"github.com/giantswarm/azure-operator/v5/service/controller/resource/tenantclients"
-	"github.com/giantswarm/azure-operator/v5/service/controller/resource/vpn"
-	"github.com/giantswarm/azure-operator/v5/service/controller/resource/vpnconnection"
 	"github.com/giantswarm/azure-operator/v5/service/controller/resource/workermigration"
 	"github.com/giantswarm/azure-operator/v5/service/controller/setting"
 )
@@ -585,41 +583,41 @@ func newAzureConfigResources(config AzureConfigConfig, certsSearcher certs.Inter
 		}
 	}
 
-	var vpnResource resource.Interface
-	{
-		c := vpn.Config{
-			CtrlClient: config.K8sClient.CtrlClient(),
-			Debugger:   newDebugger,
-			Logger:     config.Logger,
-
-			Azure: config.Azure,
-		}
-
-		vpnResource, err = vpn.New(c)
-		if err != nil {
-			return nil, microerror.Mask(err)
-		}
-	}
-
-	var vpnconnectionResource resource.Interface
-	{
-		c := vpnconnection.Config{
-			Azure:                                    config.Azure,
-			Logger:                                   config.Logger,
-			CPVirtualNetworkGatewaysClient:           *config.CPAzureClientSet.VirtualNetworkGatewaysClient,
-			CPVirtualNetworkGatewayConnectionsClient: *config.CPAzureClientSet.VirtualNetworkGatewayConnectionsClient,
-		}
-
-		ops, err := vpnconnection.New(c)
-		if err != nil {
-			return nil, microerror.Mask(err)
-		}
-
-		vpnconnectionResource, err = toCRUDResource(config.Logger, ops)
-		if err != nil {
-			return nil, microerror.Mask(err)
-		}
-	}
+	//var vpnResource resource.Interface
+	//{
+	//	c := vpn.Config{
+	//		CtrlClient: config.K8sClient.CtrlClient(),
+	//		Debugger:   newDebugger,
+	//		Logger:     config.Logger,
+	//
+	//		Azure: config.Azure,
+	//	}
+	//
+	//	vpnResource, err = vpn.New(c)
+	//	if err != nil {
+	//		return nil, microerror.Mask(err)
+	//	}
+	//}
+	//
+	//var vpnconnectionResource resource.Interface
+	//{
+	//	c := vpnconnection.Config{
+	//		Azure:                                    config.Azure,
+	//		Logger:                                   config.Logger,
+	//		CPVirtualNetworkGatewaysClient:           *config.CPAzureClientSet.VirtualNetworkGatewaysClient,
+	//		CPVirtualNetworkGatewayConnectionsClient: *config.CPAzureClientSet.VirtualNetworkGatewayConnectionsClient,
+	//	}
+	//
+	//	ops, err := vpnconnection.New(c)
+	//	if err != nil {
+	//		return nil, microerror.Mask(err)
+	//	}
+	//
+	//	vpnconnectionResource, err = toCRUDResource(config.Logger, ops)
+	//	if err != nil {
+	//		return nil, microerror.Mask(err)
+	//	}
+	//}
 
 	resources := []resource.Interface{
 		azureconfigFinalizerResource,
@@ -639,8 +637,8 @@ func newAzureConfigResources(config AzureConfigConfig, certsSearcher certs.Inter
 		mastersResource,
 		workerMigrationResource,
 		endpointsResource,
-		vpnResource,
-		vpnconnectionResource,
+		//vpnResource,
+		//vpnconnectionResource,
 	}
 
 	{

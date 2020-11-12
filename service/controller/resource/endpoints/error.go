@@ -5,10 +5,6 @@ import (
 	"github.com/giantswarm/microerror"
 )
 
-var incorrectNumberNetworkInterfacesError = &microerror.Error{
-	Kind: "incorrectNumberNetworkInterfacesError",
-}
-
 var invalidConfigError = &microerror.Error{
 	Kind: "invalidConfigError",
 }

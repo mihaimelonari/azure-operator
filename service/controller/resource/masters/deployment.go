@@ -92,14 +92,16 @@ func (r Resource) newDeployment(ctx context.Context, obj providerv1alpha1.AzureC
 	}
 
 	defaultParams := map[string]interface{}{
-		"masterLBBackendPoolID": cc.MasterLBBackendPoolID,
-		"azureOperatorVersion":  project.Version(),
-		"clusterID":             key.ClusterID(&obj),
-		"masterCloudConfigData": masterCloudConfig,
-		"masterNodes":           vmss.GetMasterNodesConfiguration(obj, distroVersion),
-		"masterSubnetID":        cc.MasterSubnetID,
-		"vmssMSIEnabled":        r.Azure.MSI.Enabled,
-		"zones":                 key.AvailabilityZones(obj, location),
+		"masterLBBackendPoolID":     cc.MasterLBBackendPoolID,
+		"masterLBBackendPoolIPv6ID": cc.MasterLBBackendPoolIPv6ID,
+		"azureOperatorVersion":      project.Version(),
+		"clusterID":                 key.ClusterID(&obj),
+		"masterCloudConfigData":     masterCloudConfig,
+		"masterNodes":               vmss.GetMasterNodesConfiguration(obj, distroVersion),
+		"masterSubnetId":            cc.MasterSubnetID,
+		"subnet6ID":                 cc.Subnet6ID,
+		"vmssMSIEnabled":            r.Azure.MSI.Enabled,
+		"zones":                     key.AvailabilityZones(obj, location),
 	}
 
 	armTemplate, err := template.GetARMTemplate()

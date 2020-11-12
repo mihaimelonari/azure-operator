@@ -195,13 +195,29 @@ func (c *AzureMachinePoolSubnetCollector) collectSubnetsFromAzureVNet(ctx contex
 		azureSubnets := resultPage.Values()
 
 		for _, azureSubnet := range azureSubnets {
-			_, subnetIPNet, err := net.ParseCIDR(*azureSubnet.AddressPrefix)
-			if err != nil {
-				errorMessage := fmt.Sprintf("error while parsing Azure subnet range %q", *azureSubnet.AddressPrefix)
-				c.logger.LogCtx(ctx, "level", "warning", "message", errorMessage)
-				return nil, microerror.Mask(err)
+			if azureSubnet.AddressPrefix != nil {
+				ip, subnetIPNet, err := net.ParseCIDR(*azureSubnet.AddressPrefix)
+				if err != nil {
+					errorMessage := fmt.Sprintf("error while parsing Azure subnet range %q", *azureSubnet.AddressPrefix)
+					c.logger.LogCtx(ctx, "level", "warning", "message", errorMessage)
+					return nil, microerror.Mask(err)
+				}
+				if ip.To4().String() == ip.String() {
+					subnets = append(subnets, *subnetIPNet)
+				}
+			} else if azureSubnet.AddressPrefixes != nil {
+				for _, cidr := range *azureSubnet.AddressPrefixes {
+					ip, subnetIPNet, err := net.ParseCIDR(cidr)
+					if err != nil {
+						errorMessage := fmt.Sprintf("error while parsing Azure subnet range %q", *azureSubnet.AddressPrefix)
+						c.logger.LogCtx(ctx, "level", "warning", "message", errorMessage)
+						return nil, microerror.Mask(err)
+					}
+					if ip.To4().String() == ip.String() {
+						subnets = append(subnets, *subnetIPNet)
+					}
+				}
 			}
-			subnets = append(subnets, *subnetIPNet)
 		}
 
 		err = resultPage.NextWithContext(ctx)

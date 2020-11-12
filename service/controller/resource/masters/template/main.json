@@ -8,6 +8,12 @@
         "description":"Output value of the API load balancer backend pool ID as referenced from the API load balancer setup."
       }
     },
+    "masterLBBackendPoolIPv6ID":{
+      "type":"string",
+      "metadata":{
+        "description":"Output value of the API load balancer backend pool ID as referenced from the API load balancer setup."
+      }
+    },
     "azureOperatorVersion":{
       "type":"string",
       "metadata":{
@@ -36,6 +42,12 @@
       "type":"array"
     },
     "masterSubnetID":{
+      "type":"string",
+      "metadata":{
+        "description":"Output value of the master subnet ID as referenced from the virtual network setup."
+      }
+    },
+    "subnet6Id":{
       "type":"string",
       "metadata":{
         "description":"Output value of the master subnet ID as referenced from the virtual network setup."
@@ -165,6 +177,9 @@
               "defaultValue":{
                 "provider":"F80D01C0-7AAC-4440-98F6-5061511962AD"
               }
+            },
+            "subnet6Id": {
+              "type":"string"
             },
             "vmssMSIEnabled":{
               "type":"bool"
@@ -309,10 +324,20 @@
                             {
                               "name":"[concat(parameters('vmssName'), '-ipconfig')]",
                               "properties":{
+                                "privateIPAddressVersion": "IPv4",
                                 "subnet":{
                                   "id":"[parameters('vmssVnetSubnetId')]"
                                 },
                                 "loadBalancerBackendAddressPools":"[parameters('vmssLbBackendPools')]"
+                              }
+                            },
+                            {
+                              "name":"[concat(parameters('vmssName'), '-ipconfig6')]",
+                              "properties":{
+                                "privateIPAddressVersion": "IPv6",
+                                "subnet":{
+                                  "id":"[parameters('subnet6Id')]"
+                                }
                               }
                             }
                           ]
@@ -421,11 +446,17 @@
             "value":[
               {
                 "id":"[parameters('masterLBBackendPoolID')]"
+              },
+              {
+                "id":"[parameters('masterLBBackendPoolIPv6ID')]"
               }
             ]
           },
           "vmssVnetSubnetId":{
             "value":"[parameters('masterSubnetID')]"
+          },
+          "subnet6Id":{
+            "value":"[parameters('subnet6Id')]"
           },
           "vmssUpgradePolicy":{
             "value":"Manual"

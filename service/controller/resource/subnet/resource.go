@@ -309,7 +309,7 @@ func (r *Resource) deleteSubnet(ctx context.Context, subnetsClient *network.Subn
 }
 
 func isProtectedSubnet(subnetName string) bool {
-	return strings.HasSuffix(subnetName, "-MasterSubnet") || strings.HasSuffix(subnetName, "-WorkerSubnet") || strings.HasSuffix(subnetName, key.VNetGatewaySubnetName())
+	return strings.HasSuffix(subnetName, "-MasterSubnet") || strings.HasSuffix(subnetName, "-WorkerSubnet") || strings.HasSuffix(subnetName, key.VNetGatewaySubnetName()) || strings.HasSuffix(subnetName, "subnet6")
 }
 
 func isSubnetInAzureClusterSpec(ctx context.Context, azureCluster capzv1alpha3.AzureCluster, subnetName string) bool {
