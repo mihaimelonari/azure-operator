@@ -28,9 +28,10 @@ import (
 )
 
 type MachinePoolConfig struct {
-	K8sClient k8sclient.Interface
-	Logger    micrologger.Logger
-	SentryDSN string
+	K8sClient        k8sclient.Interface
+	InstallationName string
+	Logger           micrologger.Logger
+	SentryDSN        string
 }
 
 func NewMachinePool(config MachinePoolConfig) (*controller.Controller, error) {
@@ -70,6 +71,11 @@ func NewMachinePool(config MachinePoolConfig) (*controller.Controller, error) {
 				label.OperatorVersion: project.Version(),
 			}),
 			SentryDSN: config.SentryDSN,
+			SentryTags: map[string]string{
+				"Installation": config.InstallationName,
+				"Controller":   project.Name() + "-machine-pool-controller",
+				"Version":      project.Version(),
+			},
 		}
 
 		operatorkitController, err = controller.New(c)

@@ -99,6 +99,11 @@ func NewAzureMachinePool(config AzureMachinePoolConfig) (*controller.Controller,
 				label.OperatorVersion: project.Version(),
 			}),
 			SentryDSN: config.SentryDSN,
+			SentryTags: map[string]string{
+				"Installation": config.InstallationName,
+				"Controller":   project.Name() + "-azure-machine-pool-controller",
+				"Version":      project.Version(),
+			},
 		}
 
 		operatorkitController, err = controller.New(c)

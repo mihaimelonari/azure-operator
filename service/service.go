@@ -395,6 +395,7 @@ func New(config Config) (*Service, error) {
 			AzureMetricsCollector: azureCollector,
 			CredentialProvider:    credentialProvider,
 			K8sClient:             k8sClient,
+			InstallationName:      config.Viper.GetString(config.Flag.Service.Installation.Name),
 			Logger:                config.Logger,
 			SentryDSN:             sentryDSN,
 		}
@@ -410,9 +411,10 @@ func New(config Config) (*Service, error) {
 	var clusterController *operatorkitcontroller.Controller
 	{
 		c := controller.ClusterConfig{
-			K8sClient: k8sClient,
-			Logger:    config.Logger,
-			SentryDSN: sentryDSN,
+			K8sClient:        k8sClient,
+			InstallationName: config.Viper.GetString(config.Flag.Service.Installation.Name),
+			Logger:           config.Logger,
+			SentryDSN:        sentryDSN,
 		}
 
 		clusterController, err = controller.NewCluster(c)
@@ -426,9 +428,10 @@ func New(config Config) (*Service, error) {
 	var machinePoolController *operatorkitcontroller.Controller
 	{
 		c := controller.MachinePoolConfig{
-			K8sClient: k8sClient,
-			Logger:    config.Logger,
-			SentryDSN: sentryDSN,
+			K8sClient:        k8sClient,
+			InstallationName: config.Viper.GetString(config.Flag.Service.Installation.Name),
+			Logger:           config.Logger,
+			SentryDSN:        sentryDSN,
 		}
 
 		machinePoolController, err = controller.NewMachinePool(c)
@@ -445,6 +448,7 @@ func New(config Config) (*Service, error) {
 			AzureMetricsCollector: azureCollector,
 			CredentialProvider:    credentialProvider,
 			K8sClient:             k8sClient,
+			InstallationName:      config.Viper.GetString(config.Flag.Service.Installation.Name),
 			Logger:                config.Logger,
 			SentryDSN:             sentryDSN,
 		}

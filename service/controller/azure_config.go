@@ -178,6 +178,11 @@ func NewAzureConfig(config AzureConfigConfig) (*controller.Controller, error) {
 				label.OperatorVersion: project.Version(),
 			}),
 			SentryDSN: config.SentryDSN,
+			SentryTags: map[string]string{
+				"Installation": config.InstallationName,
+				"Controller":   project.Name() + "-azureconfig-controller",
+				"Version":      project.Version(),
+			},
 		}
 
 		operatorkitController, err = controller.New(c)

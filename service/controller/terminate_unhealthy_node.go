@@ -31,6 +31,7 @@ type TerminateUnhealthyNodeConfig struct {
 
 	AzureMetricsCollector collector.AzureAPIMetrics
 	CredentialProvider    credential.Provider
+	InstallationName      string
 	SentryDSN             string
 }
 
@@ -96,6 +97,11 @@ func NewTerminateUnhealthyNode(config TerminateUnhealthyNodeConfig) (*controller
 				label.OperatorVersion: project.Version(),
 			}),
 			SentryDSN: config.SentryDSN,
+			SentryTags: map[string]string{
+				"Installation": config.InstallationName,
+				"Controller":   project.Name() + "-terminate-unhealthy-node-controller",
+				"Version":      project.Version(),
+			},
 		}
 
 		operatorkitController, err = controller.New(c)

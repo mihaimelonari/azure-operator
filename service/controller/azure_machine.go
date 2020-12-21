@@ -25,6 +25,7 @@ type AzureMachineConfig struct {
 	AzureMetricsCollector collector.AzureAPIMetrics
 	CredentialProvider    credential.Provider
 	K8sClient             k8sclient.Interface
+	InstallationName      string
 	Logger                micrologger.Logger
 	SentryDSN             string
 }
@@ -64,6 +65,11 @@ func NewAzureMachine(config AzureMachineConfig) (*controller.Controller, error) 
 				label.OperatorVersion: project.Version(),
 			}),
 			SentryDSN: config.SentryDSN,
+			SentryTags: map[string]string{
+				"Installation": config.InstallationName,
+				"Controller":   project.Name() + "-azure-machine-controller",
+				"Version":      project.Version(),
+			},
 		}
 
 		operatorkitController, err = controller.New(c)
