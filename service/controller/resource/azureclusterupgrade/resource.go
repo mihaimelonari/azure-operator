@@ -66,6 +66,7 @@ func (r *Resource) EnsureCreated(ctx context.Context, obj interface{}) error {
 	defer sentry.Flush(2 * time.Second)
 	err = microerror.Maskf(invalidConfigError, "Test with microerror")
 	sentry.CaptureException(err)
+	return err
 
 	r.logger.Debugf(ctx, "ensuring release labels are set on AzureMachines")
 
