@@ -35,7 +35,7 @@ require (
 	github.com/giantswarm/microkit v0.2.2
 	github.com/giantswarm/micrologger v0.4.0
 	github.com/giantswarm/operatorkit/v2 v2.0.2
-	github.com/giantswarm/operatorkit/v4 v4.0.1-0.20201223084721-aafbad0890d9
+	github.com/giantswarm/operatorkit/v4 v4.0.1-0.20201223085657-1cae503812c4
 	github.com/giantswarm/tenantcluster/v3 v3.0.0
 	github.com/giantswarm/to v0.3.0
 	github.com/giantswarm/versionbundle v0.2.0
