@@ -63,6 +63,10 @@ func (r *Resource) EnsureCreated(ctx context.Context, obj interface{}) error {
 		panic(fmt.Sprintf("sentry.Init: %s", err))
 	}
 
+	sentry.ConfigureScope(func(scope *sentry.Scope) {
+		scope.SetTag("from", "azure-operator")
+	})
+
 	defer sentry.Flush(2 * time.Second)
 	err = microerror.Maskf(invalidConfigError, "Test with microerror")
 	sentry.CaptureException(err)
