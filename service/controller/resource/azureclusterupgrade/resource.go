@@ -2,7 +2,10 @@ package azureclusterupgrade
 
 import (
 	"context"
+	"fmt"
+	"time"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/giantswarm/apiextensions/v3/pkg/label"
 	"github.com/giantswarm/microerror"
 	"github.com/giantswarm/micrologger"
@@ -52,6 +55,17 @@ func (r *Resource) EnsureCreated(ctx context.Context, obj interface{}) error {
 	if err != nil {
 		return microerror.Mask(err)
 	}
+
+	err = sentry.Init(sentry.ClientOptions{
+		Dsn: "https://632f9667d01c47719beb5b405962de53@o346224.ingest.sentry.io/5544796",
+	})
+	if err != nil {
+		panic(fmt.Sprintf("sentry.Init: %s", err))
+	}
+
+	defer sentry.Flush(2 * time.Second)
+	err = microerror.Maskf(invalidConfigError, "Test with microerror")
+	sentry.CaptureException(err)
 
 	r.logger.Debugf(ctx, "ensuring release labels are set on AzureMachines")
 
